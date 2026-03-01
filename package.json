@@ -1,0 +1,64 @@
+{
+  "name": "@moinax/orc",
+  "version": "0.1.0",
+  "description": "OpenAPI Rest Client generator - generates typed TypeScript API clients with Zod validation from OpenAPI specs",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/runtime/index.d.ts",
+      "import": "./dist/runtime/index.js",
+      "require": "./dist/runtime/index.cjs"
+    },
+    "./config": {
+      "types": "./dist/generator/config.d.ts",
+      "import": "./dist/generator/config.js",
+      "require": "./dist/generator/config.cjs"
+    }
+  },
+  "bin": {
+    "orc": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "commander": "^13.1.0",
+    "date-fns": "^4.1.0",
+    "jiti": "^2.4.2",
+    "pluralize": "^8.0.0",
+    "prettier": "^3.5.3"
+  },
+  "peerDependencies": {
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "@types/pluralize": "^0.0.33",
+    "tsup": "^8.4.0",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.0",
+    "zod": "^3.24.0"
+  },
+  "keywords": [
+    "openapi",
+    "rest",
+    "client",
+    "generator",
+    "zod",
+    "typescript"
+  ],
+  "license": "MIT",
+  "author": "moinax",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/moinax/orc.git"
+  }
+}
