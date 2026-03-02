@@ -164,6 +164,23 @@ npm run build     # Build with tsup
 npm run typecheck # Type check with tsc
 ```
 
+## Publishing
+
+```bash
+# Bump version (creates commit + git tag)
+npm version patch   # 0.1.0 → 0.1.1
+npm version minor   # 0.1.0 → 0.2.0
+npm version major   # 0.1.0 → 1.0.0
+
+# Publish (prepublishOnly will run the build automatically)
+npm publish --access public
+
+# Push commit and tag to remote
+git push --follow-tags
+```
+
+Note: `--access public` is required for scoped packages (`@moinax/orc`). You must be logged in via `npm login`.
+
 ## License
 
 MIT
