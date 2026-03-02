@@ -253,10 +253,12 @@ export class ZodGenerator {
   private convertEnumSchema(schema: OpenAPISchema, schemaName: string | null = null): string {
     const rawValues = schema.enum!;
     const hasNull = rawValues.some((v) => v === null);
-    const values = rawValues.filter((v): v is string => v !== null);
+    const values = rawValues.filter((v): v is string => v !== null && v !== '');
 
     if (values.length === 0) {
-      return 'z.null()';
+      if (hasNull) return 'z.null()';
+      // Enum with only empty string(s) — treat as z.literal('')
+      return "z.literal('')";
     }
 
     if (isBooleanLikeEnum(values)) {
