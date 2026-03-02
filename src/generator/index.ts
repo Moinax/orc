@@ -4,4 +4,4 @@ export { EnumRegistry, type EnumContext, type EnumInfo } from './enum-registry';
 export { ZodGenerator } from './zod-generator';
 export { ResourceGenerator } from './resource-generator';
 export { loadSpec } from './spec-loader';
-export { writeFile, formatCode, type GeneratedFile } from './file-writer';
+export { writeFile, type GeneratedFile } from './file-writer';

@@ -1,6 +1,6 @@
 {
   "name": "@moinax/orc",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "OpenAPI Rest Client generator - generates typed TypeScript API clients with Zod validation from OpenAPI specs",
   "type": "module",
   "exports": {
@@ -33,8 +33,7 @@
     "commander": "^13.1.0",
     "date-fns": "^4.1.0",
     "jiti": "^2.4.2",
-    "pluralize": "^8.0.0",
-    "prettier": "^3.5.3"
+    "pluralize": "^8.0.0"
   },
   "peerDependencies": {
     "zod": "^3.23.0"
@@ -42,6 +41,7 @@
   "devDependencies": {
     "@types/node": "^22.13.0",
     "@types/pluralize": "^0.0.33",
+    "prettier": "^3.5.3",
     "tsup": "^8.4.0",
     "typescript": "^5.7.3",
     "vitest": "^3.0.0",
