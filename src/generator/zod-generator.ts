@@ -54,6 +54,16 @@ export class ZodGenerator {
     }
 
     if (schema.oneOf) {
+      if (schema.oneOf.length === 2) {
+        const nullIdx = schema.oneOf.findIndex((s) => this.isNullSchema(s));
+        if (nullIdx !== -1) {
+          const nonNull = this.convertSchema(schema.oneOf[1 - nullIdx], schemaName);
+          const isInputSchema =
+            schemaName &&
+            (schemaName.includes('Input') || schemaName.includes('Create') || schemaName.includes('Update'));
+          return isInputSchema ? `${nonNull}.nullish()` : `${nonNull}.nullable()`;
+        }
+      }
       const options = schema.oneOf.map((s) => this.convertSchema(s, schemaName));
       return `z.union([${options.join(', ')}])`;
     }
@@ -110,6 +120,17 @@ export class ZodGenerator {
     }
 
     return zodSchema;
+  }
+
+  private isNullSchema(schema: OpenAPISchema): boolean {
+    if (schema.type === 'null') return true;
+    if (schema.enum && schema.enum.length === 1 && schema.enum[0] === null) return true;
+    if (schema.$ref) {
+      const refName = schema.$ref.split('/').pop()!;
+      const resolved = this.schemas[refName];
+      if (resolved) return this.isNullSchema(resolved);
+    }
+    return false;
   }
 
   private convertStringSchema(schema: OpenAPISchema, schemaName: string | null = null): string {
@@ -230,10 +251,16 @@ export class ZodGenerator {
   }
 
   private convertEnumSchema(schema: OpenAPISchema, schemaName: string | null = null): string {
-    const values = schema.enum!;
+    const rawValues = schema.enum!;
+    const hasNull = rawValues.some((v) => v === null);
+    const values = rawValues.filter((v): v is string => v !== null);
+
+    if (values.length === 0) {
+      return 'z.null()';
+    }
 
     if (isBooleanLikeEnum(values)) {
-      return 'z.boolean()';
+      return hasNull ? 'z.boolean().nullable()' : 'z.boolean()';
     }
 
     const context: EnumContext = {
@@ -243,7 +270,7 @@ export class ZodGenerator {
     };
 
     const enumInfo = this.enumRegistry.register(values, context);
-    return enumInfo.schemaConstName;
+    return hasNull ? `${enumInfo.schemaConstName}.nullable()` : enumInfo.schemaConstName;
   }
 
   private extractDependencies(schema: OpenAPISchema | undefined): Set<string> {

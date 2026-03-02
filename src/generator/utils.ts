@@ -82,7 +82,7 @@ export function validateOutputPath(outputPath: string): void {
 export interface OpenAPISchema {
   type?: string;
   format?: string;
-  enum?: string[];
+  enum?: (string | null)[];
   const?: unknown;
   nullable?: boolean;
   $ref?: string;

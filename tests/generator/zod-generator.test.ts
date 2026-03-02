@@ -180,4 +180,59 @@ describe('ZodGenerator', () => {
     expect(gen.convertSchema({ type: 'integer' }, 'PetInput')).toBe('z.coerce.number().int()');
     expect(gen.convertSchema({ type: 'integer' }, 'PetBody')).toBe('z.coerce.number().int()');
   });
+
+  it('converts enum: [null] (NullEnum) to z.null()', () => {
+    const gen = new ZodGenerator({});
+    expect(gen.convertSchema({ enum: [null] })).toBe('z.null()');
+  });
+
+  it('filters null from mixed enum values and wraps with nullable', () => {
+    const enumRegistry = new EnumRegistry();
+    const gen = new ZodGenerator({}, enumRegistry);
+    const result = gen.convertSchema(
+      { type: 'string', enum: ['active', 'inactive', null] },
+      'ContractSchema',
+    );
+    expect(result).toContain('.nullable()');
+    expect(enumRegistry.has(['active', 'inactive'])).toBe(true);
+  });
+
+  it('converts oneOf with null type to nullable', () => {
+    const gen = new ZodGenerator({});
+    const result = gen.convertSchema({
+      oneOf: [{ type: 'string' }, { type: 'null' }],
+    });
+    expect(result).toBe('z.string().nullable()');
+  });
+
+  it('converts oneOf with NullEnum $ref to nullable', () => {
+    const gen = new ZodGenerator({
+      NullEnum: { enum: [null] },
+      StatusEnum: { type: 'string', enum: ['active', 'inactive'] },
+    });
+    const result = gen.convertSchema({
+      oneOf: [
+        { $ref: '#/components/schemas/StatusEnum' },
+        { $ref: '#/components/schemas/NullEnum' },
+      ],
+    });
+    expect(result).toBe('statusEnumSchema.nullable()');
+  });
+
+  it('converts oneOf with NullEnum $ref to nullish for input schemas', () => {
+    const gen = new ZodGenerator({
+      NullEnum: { enum: [null] },
+      StatusEnum: { type: 'string', enum: ['active', 'inactive'] },
+    });
+    const result = gen.convertSchema(
+      {
+        oneOf: [
+          { $ref: '#/components/schemas/StatusEnum' },
+          { $ref: '#/components/schemas/NullEnum' },
+        ],
+      },
+      'PetInput',
+    );
+    expect(result).toBe('statusEnumSchema.nullish()');
+  });
 });
