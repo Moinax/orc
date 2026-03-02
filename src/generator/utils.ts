@@ -6,7 +6,7 @@ export function capitalize(str: string): string {
 
 export function camelCase(str: string): string {
   const result = str
-    .replace(/[-_]+/g, '_')
+    .replace(/[-_.]+/g, '_')
     .replace(/_([a-zA-Z])/g, (_, char) => char.toUpperCase())
     .replace(/_+/g, '');
 
