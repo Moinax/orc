@@ -20,6 +20,11 @@ export class EnumRegistry {
   private enums = new Map<string, EnumInfo>();
   private enumContexts = new Map<string, EnumContext[]>();
   private usedNames = new Set<string>();
+  private schemaPrefix: string;
+
+  constructor(schemaPrefix?: string) {
+    this.schemaPrefix = schemaPrefix || '';
+  }
 
   static fingerprint(values: string[]): string {
     return JSON.stringify([...values].sort());
@@ -43,6 +48,10 @@ export class EnumRegistry {
       baseName = camelCase(singularResource) + pascalCase(paramName);
     } else {
       baseName = camelCase(values[0].toLowerCase());
+    }
+
+    if (this.schemaPrefix) {
+      baseName = camelCase(this.schemaPrefix) + pascalCase(baseName);
     }
 
     const valuesConstName = pluralizeLib.isPlural(baseName) ? baseName : pluralizeLib.plural(baseName);

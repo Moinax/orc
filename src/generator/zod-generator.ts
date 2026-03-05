@@ -23,9 +23,12 @@ export class ZodGenerator {
   private currentSchemaName: string | null = null;
   private currentPropertyPath: string | null = null;
 
-  constructor(schemas?: Record<string, OpenAPISchema>, enumRegistry?: EnumRegistry) {
+  private schemaPrefix: string;
+
+  constructor(schemas?: Record<string, OpenAPISchema>, enumRegistry?: EnumRegistry, schemaPrefix?: string) {
     this.schemas = schemas || {};
     this.enumRegistry = enumRegistry || new EnumRegistry();
+    this.schemaPrefix = schemaPrefix || '';
   }
 
   addInlineSchemas(inlineSchemas: Map<string, { schema: OpenAPISchema; isInput: boolean; typeName: string }>): void {
@@ -38,7 +41,8 @@ export class ZodGenerator {
     if (schema.$ref) {
       const refName = schema.$ref.split('/').pop()!;
       const cleanedName = cleanSchemaName(refName);
-      return `${camelCase(cleanedName)}Schema`;
+      const prefixedName = this.schemaPrefix ? camelCase(this.schemaPrefix) + pascalCase(cleanedName) : cleanedName;
+      return `${camelCase(prefixedName)}Schema`;
     }
 
     if (schema.anyOf) {
@@ -393,8 +397,9 @@ export class ZodGenerator {
         cleanName = cleanName.replace('Schema', '');
       }
 
-      const schemaConstName = camelCase(cleanName) + 'Schema';
-      const typeName = pascalCase(cleanName);
+      const prefixedName = this.schemaPrefix ? pascalCase(this.schemaPrefix) + pascalCase(cleanName) : cleanName;
+      const schemaConstName = camelCase(prefixedName) + 'Schema';
+      const typeName = pascalCase(prefixedName);
 
       if (usedNames.has(schemaConstName) || usedNames.has(typeName)) {
         continue;

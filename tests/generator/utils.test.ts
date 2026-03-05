@@ -95,6 +95,18 @@ describe('getResourcePrefixedParamNames', () => {
     expect(result.schemaConstName).toBe('createVehicleParamsSchema');
     expect(result.typeName).toBe('CreateVehicleParams');
   });
+
+  it('applies schemaPrefix to get methods', () => {
+    const result = getResourcePrefixedParamNames('getList', 'Vehicles', 'Charge');
+    expect(result.schemaConstName).toBe('getChargeVehicleListParamsSchema');
+    expect(result.typeName).toBe('GetChargeVehicleListParams');
+  });
+
+  it('applies schemaPrefix to non-get methods', () => {
+    const result = getResourcePrefixedParamNames('create', 'Vehicles', 'Charge');
+    expect(result.schemaConstName).toBe('createChargeVehicleParamsSchema');
+    expect(result.typeName).toBe('CreateChargeVehicleParams');
+  });
 });
 
 describe('validateFileName', () => {

@@ -41,20 +41,22 @@ export function isBooleanLikeEnum(values: unknown[]): boolean {
 export function getResourcePrefixedParamNames(
   methodName: string,
   resourceClassName: string,
+  schemaPrefix?: string,
 ): { schemaConstName: string; typeName: string } {
   const singularResource = singularize(resourceClassName);
+  const prefix = schemaPrefix ? pascalCase(schemaPrefix) : '';
 
   if (methodName.startsWith('get')) {
     const rest = methodName.slice(3);
     return {
-      schemaConstName: `get${singularResource}${rest}ParamsSchema`,
-      typeName: `Get${singularResource}${rest}Params`,
+      schemaConstName: `get${prefix}${singularResource}${rest}ParamsSchema`,
+      typeName: `Get${prefix}${singularResource}${rest}Params`,
     };
   }
 
   return {
-    schemaConstName: `${camelCase(methodName)}${singularResource}ParamsSchema`,
-    typeName: `${pascalCase(methodName)}${singularResource}Params`,
+    schemaConstName: `${camelCase(methodName)}${prefix}${singularResource}ParamsSchema`,
+    typeName: `${pascalCase(methodName)}${prefix}${singularResource}Params`,
   };
 }
 

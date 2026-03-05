@@ -235,4 +235,42 @@ describe('ZodGenerator', () => {
     );
     expect(result).toBe('statusEnumSchema.nullish()');
   });
+
+  describe('with schemaPrefix', () => {
+    it('prefixes $ref resolution', () => {
+      const gen = new ZodGenerator({}, undefined, 'Charge');
+      const result = gen.convertSchema({ $ref: '#/components/schemas/PetSchema' });
+      expect(result).toBe('chargePetSchema');
+    });
+
+    it('prefixes generated schema const and type names', () => {
+      const gen = new ZodGenerator(
+        {
+          PetSchema: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              name: { type: 'string' },
+            },
+            required: ['id', 'name'],
+          },
+        },
+        undefined,
+        'Charge',
+      );
+
+      const output = gen.generateSchemas('@moinax/orc');
+      expect(output).toContain('export const chargePetSchema = ');
+      expect(output).toContain('export type ChargePet = ');
+    });
+
+    it('does not prefix pagination schemas', () => {
+      const gen = new ZodGenerator({}, undefined, 'Charge');
+      const output = gen.generateSchemas('@moinax/orc');
+      expect(output).toContain('export const paginationParamsSchema = ');
+      expect(output).toContain('export type PaginationParams = ');
+      expect(output).toContain('export const paginationResponseSchema = ');
+      expect(output).toContain('export type PaginationResponse = ');
+    });
+  });
 });
