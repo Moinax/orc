@@ -7,6 +7,8 @@ import {
   schemaConstToTypeName,
   isBooleanLikeEnum,
   getResourcePrefixedParamNames,
+  prefixSchemaConst,
+  prefixTypeName,
   validateFileName,
   validateOutputPath,
   isListResponse,
@@ -80,6 +82,31 @@ describe('isBooleanLikeEnum', () => {
     expect(isBooleanLikeEnum(['yes', 'no'])).toBe(false);
     expect(isBooleanLikeEnum(['true'])).toBe(false);
     expect(isBooleanLikeEnum(['true', 'false', 'maybe'])).toBe(false);
+  });
+});
+
+describe('prefixSchemaConst', () => {
+  it('returns unprefixed schema const without prefix', () => {
+    expect(prefixSchemaConst('Pet')).toBe('petSchema');
+    expect(prefixSchemaConst('Pet', undefined)).toBe('petSchema');
+    expect(prefixSchemaConst('Pet', '')).toBe('petSchema');
+  });
+
+  it('returns prefixed schema const with prefix', () => {
+    expect(prefixSchemaConst('Pet', 'Charge')).toBe('chargePetSchema');
+    expect(prefixSchemaConst('Owner', 'Charge')).toBe('chargeOwnerSchema');
+  });
+});
+
+describe('prefixTypeName', () => {
+  it('returns unprefixed type name without prefix', () => {
+    expect(prefixTypeName('Pet')).toBe('Pet');
+    expect(prefixTypeName('Pet', undefined)).toBe('Pet');
+  });
+
+  it('returns prefixed type name with prefix', () => {
+    expect(prefixTypeName('Pet', 'Charge')).toBe('ChargePet');
+    expect(prefixTypeName('Owner', 'Charge')).toBe('ChargeOwner');
   });
 });
 

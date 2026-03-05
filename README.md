@@ -97,6 +97,11 @@ export default defineConfig({
       // Optional: strip a prefix from all API paths
       // Useful when the spec includes a base path like /public
       stripPathPrefix: '/public',
+
+      // Optional: prefix all generated schema/type/enum names
+      // Useful when generating multiple clients to avoid naming collisions
+      // e.g., 'Charge' → chargePetSchema, ChargePet, ChargeContractStatus
+      schemaPrefix: 'Charge',
     },
   ],
 });

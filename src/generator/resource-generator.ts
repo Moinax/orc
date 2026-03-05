@@ -8,6 +8,8 @@ import {
   schemaConstToTypeName,
   isBooleanLikeEnum,
   getResourcePrefixedParamNames,
+  prefixSchemaConst,
+  prefixTypeName,
   operationIdToMethodName,
   getResourcePath,
   buildPathTree,
@@ -98,11 +100,10 @@ export class ResourceGenerator {
           const schemaConstName = this.generateInlineSchemaName(resourceClassName, methodName, 'body');
 
           const bodySchema = operation.requestBody!.content!['application/json']!.schema!;
-          const bodyPrefix = this.schemaPrefix ? pascalCase(this.schemaPrefix) : '';
           this.collectedInlineSchemas.set(schemaConstName, {
             schema: bodySchema,
             isInput: true,
-            typeName: `${bodyPrefix}${pascalCase(resourceClassName)}${pascalCase(methodName)}Body`,
+            typeName: prefixTypeName(`${resourceClassName}${pascalCase(methodName)}Body`, this.schemaPrefix),
           });
         }
       }
@@ -118,11 +119,10 @@ export class ResourceGenerator {
 
           const successResponse = operation.responses?.['200'] || operation.responses?.['201'];
           const inlineSchema = successResponse!.content!['application/json']!.schema!;
-          const responsePrefix = this.schemaPrefix ? pascalCase(this.schemaPrefix) : '';
           this.collectedInlineSchemas.set(schemaConstName, {
             schema: inlineSchema,
             isInput: false,
-            typeName: `${responsePrefix}${pascalCase(resourceClassName)}${pascalCase(methodName)}Response`,
+            typeName: prefixTypeName(`${resourceClassName}${pascalCase(methodName)}Response`, this.schemaPrefix),
           });
         }
       }
@@ -236,18 +236,10 @@ export class ResourceGenerator {
     return schema.type === 'object' && !!schema.properties;
   }
 
-  private prefixSchemaConst(name: string): string {
-    if (!this.schemaPrefix) return `${camelCase(name)}Schema`;
-    return `${camelCase(this.schemaPrefix)}${pascalCase(name)}Schema`;
-  }
-
-  private prefixTypeName(name: string): string {
-    if (!this.schemaPrefix) return pascalCase(name);
-    return `${pascalCase(this.schemaPrefix)}${pascalCase(name)}`;
-  }
-
   private generateInlineSchemaName(resourceName: string, methodName: string, purpose: string): string {
     const prefix = this.schemaPrefix ? camelCase(this.schemaPrefix) : '';
+    // When prefixed, resourceName must be PascalCased to avoid merging with the camelCase prefix.
+    // Without prefix, resourceName stays camelCase as the leading segment.
     const baseName = `${prefix}${prefix ? pascalCase(resourceName) : camelCase(resourceName)}${capitalize(methodName)}${capitalize(purpose)}Schema`;
     return camelCase(baseName);
   }
@@ -439,15 +431,15 @@ export class ResourceGenerator {
     for (const { pathPattern, operation } of node.operations) {
       const responseSchema = this.getResponseSchemaName(operation, pathPattern);
       if (responseSchema) {
-        const schemaConst = this.prefixSchemaConst(responseSchema);
+        const schemaConst = prefixSchemaConst(responseSchema, this.schemaPrefix);
         schemaImports.add(schemaConst);
-        typeImports.set(schemaConst, this.prefixTypeName(responseSchema));
+        typeImports.set(schemaConst, prefixTypeName(responseSchema, this.schemaPrefix));
       }
       const requestSchema = this.getRequestSchemaName(operation, pathPattern);
       if (requestSchema) {
-        const schemaConst = this.prefixSchemaConst(requestSchema);
+        const schemaConst = prefixSchemaConst(requestSchema, this.schemaPrefix);
         schemaImports.add(schemaConst);
-        typeImports.set(schemaConst, this.prefixTypeName(requestSchema));
+        typeImports.set(schemaConst, prefixTypeName(requestSchema, this.schemaPrefix));
       }
     }
 
@@ -588,7 +580,7 @@ export class ResourceGenerator {
 
       if (['post', 'put', 'patch'].includes(httpMethod) && operation.requestBody) {
         if (requestSchema) {
-          const schemaConst = this.prefixSchemaConst(requestSchema);
+          const schemaConst = prefixSchemaConst(requestSchema, this.schemaPrefix);
           const typeName = typeImports.get(schemaConst)!;
           params.push(`body: ${typeName}`);
         } else if (inlineBodySchema) {
@@ -615,8 +607,8 @@ export class ResourceGenerator {
           if (dataRef) {
             const rawItemSchema = dataRef.split('/').pop()!;
             const itemSchema = cleanSchemaName(rawItemSchema);
-            const itemSchemaConst = this.prefixSchemaConst(itemSchema);
-            const itemTypeName = this.prefixTypeName(itemSchema);
+            const itemSchemaConst = prefixSchemaConst(itemSchema, this.schemaPrefix);
+            const itemTypeName = prefixTypeName(itemSchema, this.schemaPrefix);
             schemaImports.add(itemSchemaConst);
             typeImports.set(itemSchemaConst, itemTypeName);
             returnType = `{ pagination: PaginationResponse; data: ${itemTypeName}[] }`;
@@ -624,8 +616,8 @@ export class ResourceGenerator {
     return parseSchema(schema, response);`;
           } else {
             if (responseSchema) {
-              const itemSchemaConst = this.prefixSchemaConst(responseSchema);
-              const itemTypeName = this.prefixTypeName(responseSchema);
+              const itemSchemaConst = prefixSchemaConst(responseSchema, this.schemaPrefix);
+              const itemTypeName = prefixTypeName(responseSchema, this.schemaPrefix);
               schemaImports.add(itemSchemaConst);
               typeImports.set(itemSchemaConst, itemTypeName);
               returnType = `{ pagination: PaginationResponse; data: ${itemTypeName}[] }`;
@@ -638,8 +630,8 @@ export class ResourceGenerator {
             }
           }
         } else if (responseSchema) {
-          const schemaConstName = this.prefixSchemaConst(responseSchema);
-          const typeName = this.prefixTypeName(responseSchema);
+          const schemaConstName = prefixSchemaConst(responseSchema, this.schemaPrefix);
+          const typeName = prefixTypeName(responseSchema, this.schemaPrefix);
           returnType = typeName;
           parseLogic = `return parseSchema(${schemaConstName}, response);`;
           schemaImports.add(schemaConstName);
@@ -680,7 +672,7 @@ export class ResourceGenerator {
 
       if (hasBodyValidation) {
         const bodySchemaConst = requestSchema
-          ? this.prefixSchemaConst(requestSchema)
+          ? prefixSchemaConst(requestSchema, this.schemaPrefix)
           : inlineBodySchema!.schemaConst;
         lines.push(`    const validatedBody = parseSchema(${bodySchemaConst}, body);`);
       }
