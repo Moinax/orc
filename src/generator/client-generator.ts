@@ -54,13 +54,14 @@ export async function generateClient(
   const spec = await loadSpec(specUrl);
 
   // Create shared enum registry
-  const enumRegistry = new EnumRegistry();
+  const enumRegistry = new EnumRegistry(config.schemaPrefix);
 
   // Create resource generator
   const resourceGenerator = new ResourceGenerator(spec.paths, spec.components?.schemas, clientClassName, {
     stripPathPrefix: config.stripPathPrefix,
     enumRegistry,
     runtimePackage,
+    schemaPrefix: config.schemaPrefix,
   });
 
   // Generate resources FIRST (registers query param enums)
@@ -69,7 +70,7 @@ export async function generateClient(
 
   // Generate schemas (including inline schemas from resources)
   console.log('\nGenerating Zod schemas...');
-  const zodGenerator = new ZodGenerator(spec.components?.schemas, enumRegistry);
+  const zodGenerator = new ZodGenerator(spec.components?.schemas, enumRegistry, config.schemaPrefix);
   zodGenerator.addInlineSchemas(inlineSchemas);
   const schemasCode = zodGenerator.generateSchemas(runtimePackage);
 

@@ -3,6 +3,7 @@ export interface ClientConfig {
   spec: string;
   output: string;
   stripPathPrefix?: string;
+  schemaPrefix?: string;
 }
 
 export interface OrcConfig {

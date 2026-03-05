@@ -1,5 +1,5 @@
 import { EnumRegistry, EnumContext } from './enum-registry';
-import { camelCase, pascalCase, isBooleanLikeEnum, cleanSchemaName, OpenAPISchema } from './utils';
+import { camelCase, pascalCase, isBooleanLikeEnum, cleanSchemaName, prefixSchemaConst, prefixTypeName, OpenAPISchema } from './utils';
 
 export interface UsedDateSchemas {
   stringToDateSchema: boolean;
@@ -23,9 +23,12 @@ export class ZodGenerator {
   private currentSchemaName: string | null = null;
   private currentPropertyPath: string | null = null;
 
-  constructor(schemas?: Record<string, OpenAPISchema>, enumRegistry?: EnumRegistry) {
+  private schemaPrefix: string;
+
+  constructor(schemas?: Record<string, OpenAPISchema>, enumRegistry?: EnumRegistry, schemaPrefix?: string) {
     this.schemas = schemas || {};
     this.enumRegistry = enumRegistry || new EnumRegistry();
+    this.schemaPrefix = schemaPrefix || '';
   }
 
   addInlineSchemas(inlineSchemas: Map<string, { schema: OpenAPISchema; isInput: boolean; typeName: string }>): void {
@@ -38,7 +41,7 @@ export class ZodGenerator {
     if (schema.$ref) {
       const refName = schema.$ref.split('/').pop()!;
       const cleanedName = cleanSchemaName(refName);
-      return `${camelCase(cleanedName)}Schema`;
+      return prefixSchemaConst(cleanedName, this.schemaPrefix);
     }
 
     if (schema.anyOf) {
@@ -393,8 +396,8 @@ export class ZodGenerator {
         cleanName = cleanName.replace('Schema', '');
       }
 
-      const schemaConstName = camelCase(cleanName) + 'Schema';
-      const typeName = pascalCase(cleanName);
+      const schemaConstName = prefixSchemaConst(cleanName, this.schemaPrefix);
+      const typeName = prefixTypeName(cleanName, this.schemaPrefix);
 
       if (usedNames.has(schemaConstName) || usedNames.has(typeName)) {
         continue;

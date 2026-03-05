@@ -83,4 +83,44 @@ describe('EnumRegistry', () => {
   it('fingerprints are order-independent', () => {
     expect(EnumRegistry.fingerprint(['b', 'a'])).toBe(EnumRegistry.fingerprint(['a', 'b']));
   });
+
+  describe('with schemaPrefix', () => {
+    it('prefixes schema enum names', () => {
+      const registry = new EnumRegistry('Charge');
+      const info = registry.register(['active', 'inactive'], {
+        source: 'schema',
+        schemaName: 'ContractSchema',
+        propertyPath: 'status',
+      });
+
+      expect(info.typeName).toBe('ChargeContractStatus');
+      expect(info.schemaConstName).toBe('chargeContractStatusSchema');
+      expect(info.valuesConstName).toBe('chargeContractStatuses');
+    });
+
+    it('prefixes query param enum names', () => {
+      const registry = new EnumRegistry('Charge');
+      const info = registry.register(['asc', 'desc'], {
+        source: 'queryParam',
+        resourceName: 'Vehicles',
+        paramName: 'ordering',
+      });
+
+      expect(info.typeName).toBe('ChargeVehicleOrdering');
+    });
+
+    it('generates prefixed enum exports code', () => {
+      const registry = new EnumRegistry('Charge');
+      registry.register(['active', 'inactive'], {
+        source: 'schema',
+        schemaName: 'Contract',
+        propertyPath: 'status',
+      });
+
+      const code = registry.generateEnumExports();
+      expect(code).toContain("export const chargeContractStatuses = ['active', 'inactive'] as const;");
+      expect(code).toContain('export const chargeContractStatusSchema = z.enum(chargeContractStatuses);');
+      expect(code).toContain('export type ChargeContractStatus = z.output<typeof chargeContractStatusSchema>;');
+    });
+  });
 });

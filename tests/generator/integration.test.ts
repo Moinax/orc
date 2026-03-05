@@ -141,6 +141,47 @@ describe('Integration: generateClient', () => {
     expect(indexFile!.content).toContain('export {');
   });
 
+  it('generates prefixed schemas with schemaPrefix', async () => {
+    const specPath = path.join(fixtureDir, 'petstore.json');
+
+    const result = await generateClient(
+      {
+        name: 'Petstore',
+        spec: specPath,
+        output: '/tmp/orc-test-output',
+        schemaPrefix: 'Charge',
+      },
+      {
+        write: false,
+        runtimePackage: '@moinax/orc',
+      },
+    );
+
+    const schemasFile = result.files!.find((f) => f.path.endsWith('schemas.ts'));
+    expect(schemasFile).toBeDefined();
+
+    // Schema consts and types should be prefixed
+    expect(schemasFile!.content).toContain('export const chargePetSchema = ');
+    expect(schemasFile!.content).toContain('export type ChargePet = ');
+    expect(schemasFile!.content).toContain('chargeOwnerSchema');
+    expect(schemasFile!.content).toContain('export type ChargeOwner');
+
+    // Pagination schemas should NOT be prefixed
+    expect(schemasFile!.content).toContain('export const paginationParamsSchema = ');
+    expect(schemasFile!.content).toContain('export type PaginationParams = ');
+    expect(schemasFile!.content).toContain('export const paginationResponseSchema = ');
+    expect(schemasFile!.content).toContain('export type PaginationResponse = ');
+
+    // Enums should be prefixed
+    expect(schemasFile!.content).not.toMatch(/export const petSpecies =/);
+
+    // Resource files should reference prefixed schema names
+    const petsResource = result.files!.find((f) => path.basename(f.path) === 'Pets.resource.ts');
+    expect(petsResource).toBeDefined();
+    expect(petsResource!.content).toContain('chargePetSchema');
+    expect(petsResource!.content).toContain('ChargePet');
+  });
+
   it('generates main index with re-exports', async () => {
     const specPath = path.join(fixtureDir, 'petstore.json');
 

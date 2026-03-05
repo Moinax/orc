@@ -38,23 +38,35 @@ export function isBooleanLikeEnum(values: unknown[]): boolean {
   return sorted[0] === 'false' && sorted[1] === 'true';
 }
 
+export function prefixSchemaConst(name: string, schemaPrefix?: string): string {
+  if (!schemaPrefix) return `${camelCase(name)}Schema`;
+  return `${camelCase(schemaPrefix)}${pascalCase(name)}Schema`;
+}
+
+export function prefixTypeName(name: string, schemaPrefix?: string): string {
+  if (!schemaPrefix) return pascalCase(name);
+  return `${pascalCase(schemaPrefix)}${pascalCase(name)}`;
+}
+
 export function getResourcePrefixedParamNames(
   methodName: string,
   resourceClassName: string,
+  schemaPrefix?: string,
 ): { schemaConstName: string; typeName: string } {
   const singularResource = singularize(resourceClassName);
+  const prefix = schemaPrefix ? pascalCase(schemaPrefix) : '';
 
   if (methodName.startsWith('get')) {
     const rest = methodName.slice(3);
     return {
-      schemaConstName: `get${singularResource}${rest}ParamsSchema`,
-      typeName: `Get${singularResource}${rest}Params`,
+      schemaConstName: `get${prefix}${singularResource}${rest}ParamsSchema`,
+      typeName: `Get${prefix}${singularResource}${rest}Params`,
     };
   }
 
   return {
-    schemaConstName: `${camelCase(methodName)}${singularResource}ParamsSchema`,
-    typeName: `${pascalCase(methodName)}${singularResource}Params`,
+    schemaConstName: `${camelCase(methodName)}${prefix}${singularResource}ParamsSchema`,
+    typeName: `${pascalCase(methodName)}${prefix}${singularResource}Params`,
   };
 }
 

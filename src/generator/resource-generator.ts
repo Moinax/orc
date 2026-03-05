@@ -8,6 +8,8 @@ import {
   schemaConstToTypeName,
   isBooleanLikeEnum,
   getResourcePrefixedParamNames,
+  prefixSchemaConst,
+  prefixTypeName,
   operationIdToMethodName,
   getResourcePath,
   buildPathTree,
@@ -38,6 +40,7 @@ export class ResourceGenerator {
   >();
   private currentResourceName: string | null = null;
   private runtimePackage: string;
+  private schemaPrefix: string;
 
   constructor(
     paths: Record<string, Record<string, OpenAPIOperation | OpenAPIParameter[]>> | undefined,
@@ -47,6 +50,7 @@ export class ResourceGenerator {
       stripPathPrefix?: string;
       enumRegistry?: EnumRegistry;
       runtimePackage?: string;
+      schemaPrefix?: string;
     } = {},
   ) {
     this.schemas = schemas || {};
@@ -54,6 +58,7 @@ export class ResourceGenerator {
     this.stripPathPrefix = options.stripPathPrefix || null;
     this.enumRegistry = options.enumRegistry || new EnumRegistry();
     this.runtimePackage = options.runtimePackage || '@moinax/orc';
+    this.schemaPrefix = options.schemaPrefix || '';
 
     this.paths = this.stripPathPrefix ? this.stripPrefixFromPaths(paths || {}) : paths || {};
     this.pathTree = buildPathTree(this.paths);
@@ -98,7 +103,7 @@ export class ResourceGenerator {
           this.collectedInlineSchemas.set(schemaConstName, {
             schema: bodySchema,
             isInput: true,
-            typeName: `${pascalCase(resourceClassName)}${pascalCase(methodName)}Body`,
+            typeName: prefixTypeName(`${resourceClassName}${pascalCase(methodName)}Body`, this.schemaPrefix),
           });
         }
       }
@@ -117,7 +122,7 @@ export class ResourceGenerator {
           this.collectedInlineSchemas.set(schemaConstName, {
             schema: inlineSchema,
             isInput: false,
-            typeName: `${pascalCase(resourceClassName)}${pascalCase(methodName)}Response`,
+            typeName: prefixTypeName(`${resourceClassName}${pascalCase(methodName)}Response`, this.schemaPrefix),
           });
         }
       }
@@ -232,7 +237,10 @@ export class ResourceGenerator {
   }
 
   private generateInlineSchemaName(resourceName: string, methodName: string, purpose: string): string {
-    const baseName = `${camelCase(resourceName)}${capitalize(methodName)}${capitalize(purpose)}Schema`;
+    const prefix = this.schemaPrefix ? camelCase(this.schemaPrefix) : '';
+    // When prefixed, resourceName must be PascalCased to avoid merging with the camelCase prefix.
+    // Without prefix, resourceName stays camelCase as the leading segment.
+    const baseName = `${prefix}${prefix ? pascalCase(resourceName) : camelCase(resourceName)}${capitalize(methodName)}${capitalize(purpose)}Schema`;
     return camelCase(baseName);
   }
 
@@ -423,15 +431,15 @@ export class ResourceGenerator {
     for (const { pathPattern, operation } of node.operations) {
       const responseSchema = this.getResponseSchemaName(operation, pathPattern);
       if (responseSchema) {
-        const schemaConst = `${camelCase(responseSchema)}Schema`;
+        const schemaConst = prefixSchemaConst(responseSchema, this.schemaPrefix);
         schemaImports.add(schemaConst);
-        typeImports.set(schemaConst, pascalCase(responseSchema));
+        typeImports.set(schemaConst, prefixTypeName(responseSchema, this.schemaPrefix));
       }
       const requestSchema = this.getRequestSchemaName(operation, pathPattern);
       if (requestSchema) {
-        const schemaConst = `${camelCase(requestSchema)}Schema`;
+        const schemaConst = prefixSchemaConst(requestSchema, this.schemaPrefix);
         schemaImports.add(schemaConst);
-        typeImports.set(schemaConst, pascalCase(requestSchema));
+        typeImports.set(schemaConst, prefixTypeName(requestSchema, this.schemaPrefix));
       }
     }
 
@@ -500,7 +508,7 @@ export class ResourceGenerator {
       if (queryParams.length > 0) {
         const opKey = this.getOperationKey(pathPattern, httpMethod);
         const methodName = operationMethodNames.get(opKey)!;
-        const { schemaConstName, typeName } = getResourcePrefixedParamNames(methodName, resourceClassName);
+        const { schemaConstName, typeName } = getResourcePrefixedParamNames(methodName, resourceClassName, this.schemaPrefix);
 
         const specificParams = queryParams.filter((p) => !this.isPaginationParam(p.name));
 
@@ -563,7 +571,7 @@ export class ResourceGenerator {
       }
 
       if (queryParams.length > 0) {
-        const { typeName } = getResourcePrefixedParamNames(methodName, resourceClassName);
+        const { typeName } = getResourcePrefixedParamNames(methodName, resourceClassName, this.schemaPrefix);
         const hasRequired = queryParams.some((p) => p.required);
         params.push(`params${hasRequired ? '' : '?'}: ${typeName}`);
       }
@@ -572,7 +580,7 @@ export class ResourceGenerator {
 
       if (['post', 'put', 'patch'].includes(httpMethod) && operation.requestBody) {
         if (requestSchema) {
-          const schemaConst = `${camelCase(requestSchema)}Schema`;
+          const schemaConst = prefixSchemaConst(requestSchema, this.schemaPrefix);
           const typeName = typeImports.get(schemaConst)!;
           params.push(`body: ${typeName}`);
         } else if (inlineBodySchema) {
@@ -599,8 +607,8 @@ export class ResourceGenerator {
           if (dataRef) {
             const rawItemSchema = dataRef.split('/').pop()!;
             const itemSchema = cleanSchemaName(rawItemSchema);
-            const itemSchemaConst = `${camelCase(itemSchema)}Schema`;
-            const itemTypeName = pascalCase(itemSchema);
+            const itemSchemaConst = prefixSchemaConst(itemSchema, this.schemaPrefix);
+            const itemTypeName = prefixTypeName(itemSchema, this.schemaPrefix);
             schemaImports.add(itemSchemaConst);
             typeImports.set(itemSchemaConst, itemTypeName);
             returnType = `{ pagination: PaginationResponse; data: ${itemTypeName}[] }`;
@@ -608,8 +616,8 @@ export class ResourceGenerator {
     return parseSchema(schema, response);`;
           } else {
             if (responseSchema) {
-              const itemSchemaConst = `${camelCase(responseSchema)}Schema`;
-              const itemTypeName = pascalCase(responseSchema);
+              const itemSchemaConst = prefixSchemaConst(responseSchema, this.schemaPrefix);
+              const itemTypeName = prefixTypeName(responseSchema, this.schemaPrefix);
               schemaImports.add(itemSchemaConst);
               typeImports.set(itemSchemaConst, itemTypeName);
               returnType = `{ pagination: PaginationResponse; data: ${itemTypeName}[] }`;
@@ -622,8 +630,8 @@ export class ResourceGenerator {
             }
           }
         } else if (responseSchema) {
-          const schemaConstName = `${camelCase(responseSchema)}Schema`;
-          const typeName = pascalCase(responseSchema);
+          const schemaConstName = prefixSchemaConst(responseSchema, this.schemaPrefix);
+          const typeName = prefixTypeName(responseSchema, this.schemaPrefix);
           returnType = typeName;
           parseLogic = `return parseSchema(${schemaConstName}, response);`;
           schemaImports.add(schemaConstName);
@@ -642,7 +650,7 @@ export class ResourceGenerator {
       lines.push(`  async ${methodName}(${params.join(', ')}): Promise<${returnType}> {`);
 
       if (queryParams.length > 0) {
-        const { schemaConstName } = getResourcePrefixedParamNames(methodName, resourceClassName);
+        const { schemaConstName } = getResourcePrefixedParamNames(methodName, resourceClassName, this.schemaPrefix);
         lines.push(`    const searchParams = new URLSearchParams();`);
         lines.push(`    if (params) {`);
         lines.push(`      const validated = parseSchema(${schemaConstName}, params);`);
@@ -664,7 +672,7 @@ export class ResourceGenerator {
 
       if (hasBodyValidation) {
         const bodySchemaConst = requestSchema
-          ? `${camelCase(requestSchema)}Schema`
+          ? prefixSchemaConst(requestSchema, this.schemaPrefix)
           : inlineBodySchema!.schemaConst;
         lines.push(`    const validatedBody = parseSchema(${bodySchemaConst}, body);`);
       }
