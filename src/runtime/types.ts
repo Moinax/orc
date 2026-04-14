@@ -12,7 +12,7 @@ export interface ClientRequestInit extends RequestInit {
 
 export interface ClientOptions {
   getAccessToken?: () => Promise<string | undefined>;
-  responseHandler?: (response: Response, debugInfo?: object) => Promise<Response>;
+  responseHandler?: (response: Response, path?: string, init?: RequestInit) => Promise<Response>;
   logger?: Logger;
   retries?: number;
   debug?: boolean;

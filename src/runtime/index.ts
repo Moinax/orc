@@ -1,6 +1,6 @@
 export { Client } from './Client';
 export { Resource } from './Resource';
-export { ClientError, ParseError, formatError } from './errors';
+export { ClientError, NetworkError, ParseError, formatError } from './errors';
 export { parseSchema } from './parseSchema';
 export {
   stringToDateSchema,
