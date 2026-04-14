@@ -13,9 +13,18 @@ export class ClientError extends Error {
     public readonly message: string,
     public readonly status: number,
     public readonly requestId?: string,
+    public readonly url?: string,
+    public readonly method?: string,
   ) {
     super(message);
     this.name = 'ClientError';
+  }
+}
+
+export class NetworkError extends ClientError {
+  constructor(message: string, url: string, method: string) {
+    super(message, 0, undefined, url, method);
+    this.name = 'NetworkError';
   }
 }
 
