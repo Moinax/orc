@@ -1,7 +1,7 @@
-import { ClientError } from './errors';
+import { ClientError, NetworkError } from './errors';
 import type { ClientOptions, ClientRequestInit, DownloadDTO, Logger } from './types';
 
-async function defaultResponseHandler(response: Response): Promise<Response> {
+async function defaultResponseHandler(response: Response, path?: string, init?: RequestInit): Promise<Response> {
   if (!response.ok) {
     let body, json, text;
     try {
@@ -10,7 +10,13 @@ async function defaultResponseHandler(response: Response): Promise<Response> {
     } catch {
       text = body;
     }
-    throw new ClientError(json?.message ?? json?.detail ?? text ?? response.statusText, response.status);
+    throw new ClientError(
+      json?.message ?? json?.detail ?? text ?? response.statusText,
+      response.status,
+      undefined,
+      response.url,
+      init?.method ?? 'GET',
+    );
   }
   return response;
 }
@@ -18,7 +24,7 @@ async function defaultResponseHandler(response: Response): Promise<Response> {
 export class Client {
   protected baseUrl: string;
   protected getAccessToken: () => Promise<string | undefined>;
-  protected responseHandler: (response: Response, debugInfo?: object) => Promise<Response>;
+  protected responseHandler: (response: Response, path?: string, init?: RequestInit) => Promise<Response>;
   protected logger: Logger;
   protected retries: number;
   protected debug: boolean;
@@ -76,10 +82,15 @@ export class Client {
         retryCounter--;
       }
 
-      return this.responseHandler(response);
+      return this.responseHandler(response, path, init);
     } catch (error) {
+      if (error instanceof ClientError) throw error;
       this.logger.error(error);
-      throw error;
+      throw new NetworkError(
+        error instanceof Error ? error.message : 'Network request failed',
+        path,
+        options?.method ?? 'GET',
+      );
     }
   }
 

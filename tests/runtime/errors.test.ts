@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
-import { ClientError, ParseError, formatError } from '../../src/runtime/errors';
+import { ClientError, NetworkError, ParseError, formatError } from '../../src/runtime/errors';
 
 describe('ClientError', () => {
   it('has correct properties', () => {
@@ -9,6 +9,18 @@ describe('ClientError', () => {
     expect(error.status).toBe(404);
     expect(error.requestId).toBe('req-123');
     expect(error.name).toBe('ClientError');
+  });
+
+  it('has optional url and method fields', () => {
+    const error = new ClientError('Server error', 500, 'req-456', 'http://localhost/api/test', 'POST');
+    expect(error.url).toBe('http://localhost/api/test');
+    expect(error.method).toBe('POST');
+  });
+
+  it('defaults url and method to undefined', () => {
+    const error = new ClientError('Not found', 404);
+    expect(error.url).toBeUndefined();
+    expect(error.method).toBeUndefined();
   });
 });
 
@@ -23,6 +35,19 @@ describe('ParseError', () => {
       expect(error.message).toContain('TestSchema');
       expect(error.message).toContain('name');
     }
+  });
+});
+
+describe('NetworkError', () => {
+  it('has correct properties', () => {
+    const error = new NetworkError('Failed to fetch', 'http://localhost/api/test', 'GET');
+    expect(error.message).toBe('Failed to fetch');
+    expect(error.status).toBe(0);
+    expect(error.url).toBe('http://localhost/api/test');
+    expect(error.method).toBe('GET');
+    expect(error.name).toBe('NetworkError');
+    expect(error).toBeInstanceOf(ClientError);
+    expect(error).toBeInstanceOf(Error);
   });
 });
 
