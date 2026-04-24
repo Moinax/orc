@@ -82,13 +82,12 @@ export async function generateClient(
     content: schemasCode,
   });
 
-  // Resource files
   const resourceNames: string[] = [];
   for (const [resourceName, code] of Object.entries(resources)) {
     validateFileName(resourceName, 'resource name');
     generatedFiles.push({
       path: path.join(outputDir, 'resources', `${resourceName}.resource.ts`),
-      content: code,
+      content: enumRegistry.applyPlaceholders(code),
     });
     resourceNames.push(resourceName);
   }

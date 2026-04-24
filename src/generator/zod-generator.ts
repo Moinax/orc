@@ -451,6 +451,8 @@ export class ZodGenerator {
       }
     }
 
+    this.enumRegistry.finalize();
+
     const output: string[] = [];
     output.push("import { z } from 'zod';");
 
@@ -471,6 +473,6 @@ export class ZodGenerator {
 
     output.push(...schemaOutput);
 
-    return output.join('\n');
+    return this.enumRegistry.applyPlaceholders(output.join('\n'));
   }
 }
