@@ -1,6 +1,6 @@
 {
   "name": "@moinax/orc",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "OpenAPI Rest Client generator - generates typed TypeScript API clients with Zod validation from OpenAPI specs",
   "type": "module",
   "exports": {
