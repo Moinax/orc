@@ -1,0 +1,35 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Streaming API",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/policy/chat": {
+      "post": {
+        "operationId": "policy_chat",
+        "tags": ["policy"],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "health_get",
+        "tags": ["health"],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {}
+  }
+}

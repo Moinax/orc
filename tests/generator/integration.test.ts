@@ -182,6 +182,76 @@ describe('Integration: generateClient', () => {
     expect(petsResource!.content).toContain('ChargePet');
   });
 
+  it('generates a POST method without a body argument when the spec has no requestBody', async () => {
+    const specPath = path.join(fixtureDir, 'streaming.json');
+
+    const result = await generateClient(
+      {
+        name: 'Streaming',
+        spec: specPath,
+        output: '/tmp/orc-test-output',
+      },
+      { write: false },
+    );
+
+    const policyChatResource = result.files!.find(
+      (f) => path.basename(f.path) === 'PolicyChat.resource.ts',
+    );
+    expect(policyChatResource).toBeDefined();
+
+    // Method signature must not declare a `body` parameter, and the call
+    // must not reference an undeclared `body` variable.
+    expect(policyChatResource!.content).toMatch(/async create\(\):\s*Promise<void>/);
+    expect(policyChatResource!.content).toContain('await this.client.post(`/policy/chat`);');
+    expect(policyChatResource!.content).not.toMatch(/post\([^)]*,\s*body\)/);
+  });
+
+  it('skips paths listed in the exclude option', async () => {
+    const specPath = path.join(fixtureDir, 'streaming.json');
+
+    const result = await generateClient(
+      {
+        name: 'Streaming',
+        spec: specPath,
+        output: '/tmp/orc-test-output',
+        exclude: ['/policy/chat'],
+      },
+      { write: false },
+    );
+
+    // PolicyChat resource should not be generated at all
+    expect(
+      result.files!.find((f) => path.basename(f.path) === 'PolicyChat.resource.ts'),
+    ).toBeUndefined();
+    expect(result.resourceNames).not.toContain('Policy');
+
+    // Other resources are still generated
+    expect(
+      result.files!.find((f) => path.basename(f.path) === 'Health.resource.ts'),
+    ).toBeDefined();
+  });
+
+  it('supports RegExp patterns in the exclude option', async () => {
+    const specPath = path.join(fixtureDir, 'streaming.json');
+
+    const result = await generateClient(
+      {
+        name: 'Streaming',
+        spec: specPath,
+        output: '/tmp/orc-test-output',
+        exclude: [/\/chat$/],
+      },
+      { write: false },
+    );
+
+    expect(
+      result.files!.find((f) => path.basename(f.path) === 'PolicyChat.resource.ts'),
+    ).toBeUndefined();
+    expect(
+      result.files!.find((f) => path.basename(f.path) === 'Health.resource.ts'),
+    ).toBeDefined();
+  });
+
   it('generates main index with re-exports', async () => {
     const specPath = path.join(fixtureDir, 'petstore.json');
 

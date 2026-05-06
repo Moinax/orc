@@ -30,6 +30,7 @@ export class ResourceGenerator {
   private schemas: Record<string, OpenAPISchema>;
   private clientClassName: string;
   private stripPathPrefix: string | null;
+  private exclude: Array<string | RegExp>;
   public enumRegistry: EnumRegistry;
   private paths: Record<string, Record<string, OpenAPIOperation | OpenAPIParameter[]>>;
   private pathTree: PathTreeNode;
@@ -51,17 +52,38 @@ export class ResourceGenerator {
       enumRegistry?: EnumRegistry;
       runtimePackage?: string;
       schemaPrefix?: string;
+      exclude?: Array<string | RegExp>;
     } = {},
   ) {
     this.schemas = schemas || {};
     this.clientClassName = clientClassName;
     this.stripPathPrefix = options.stripPathPrefix || null;
+    this.exclude = options.exclude || [];
     this.enumRegistry = options.enumRegistry || new EnumRegistry();
     this.runtimePackage = options.runtimePackage || '@moinax/orc';
     this.schemaPrefix = options.schemaPrefix || '';
 
-    this.paths = this.stripPathPrefix ? this.stripPrefixFromPaths(paths || {}) : paths || {};
+    const stripped = this.stripPathPrefix ? this.stripPrefixFromPaths(paths || {}) : paths || {};
+    this.paths = this.exclude.length > 0 ? this.applyExcludeFilter(stripped) : stripped;
     this.pathTree = buildPathTree(this.paths);
+  }
+
+  private isExcluded(pathPattern: string): boolean {
+    return this.exclude.some((pattern) =>
+      typeof pattern === 'string' ? pattern === pathPattern : pattern.test(pathPattern),
+    );
+  }
+
+  private applyExcludeFilter(
+    paths: Record<string, Record<string, OpenAPIOperation | OpenAPIParameter[]>>,
+  ): Record<string, Record<string, OpenAPIOperation | OpenAPIParameter[]>> {
+    const result: Record<string, Record<string, OpenAPIOperation | OpenAPIParameter[]>> = {};
+    for (const [pathPattern, methods] of Object.entries(paths)) {
+      if (!this.isExcluded(pathPattern)) {
+        result[pathPattern] = methods;
+      }
+    }
+    return result;
   }
 
   collectAllInlineSchemas(): Map<string, { schema: OpenAPISchema; isInput: boolean; typeName: string }> {
@@ -666,8 +688,9 @@ export class ResourceGenerator {
       const needsResponse = returnType !== 'void';
       const responsePrefix = needsResponse ? 'const response = ' : '';
 
+      const hasBodyParam = ['post', 'put', 'patch'].includes(httpMethod) && !!operation.requestBody;
       const hasBodySchema = requestSchema || inlineBodySchema;
-      const hasBodyValidation = ['post', 'put', 'patch'].includes(httpMethod) && hasBodySchema;
+      const hasBodyValidation = hasBodyParam && hasBodySchema;
       const bodyVar = hasBodyValidation ? 'validatedBody' : 'body';
 
       if (hasBodyValidation) {
@@ -677,18 +700,20 @@ export class ResourceGenerator {
         lines.push(`    const validatedBody = parseSchema(${bodySchemaConst}, body);`);
       }
 
+      const bodyArg = hasBodyParam ? `, ${bodyVar}` : '';
+
       switch (httpMethod) {
         case 'get':
           lines.push(`    ${responsePrefix}await this.client.get(${urlVar});`);
           break;
         case 'post':
-          lines.push(`    ${responsePrefix}await this.client.post(${urlVar}, ${bodyVar});`);
+          lines.push(`    ${responsePrefix}await this.client.post(${urlVar}${bodyArg});`);
           break;
         case 'put':
-          lines.push(`    ${responsePrefix}await this.client.put(${urlVar}, ${bodyVar});`);
+          lines.push(`    ${responsePrefix}await this.client.put(${urlVar}${bodyArg});`);
           break;
         case 'patch':
-          lines.push(`    ${responsePrefix}await this.client.patch(${urlVar}, ${bodyVar});`);
+          lines.push(`    ${responsePrefix}await this.client.patch(${urlVar}${bodyArg});`);
           break;
         case 'delete':
           lines.push(`    ${responsePrefix}await this.client.delete(${urlVar});`);

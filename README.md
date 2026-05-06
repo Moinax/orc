@@ -102,6 +102,13 @@ export default defineConfig({
       // Useful when generating multiple clients to avoid naming collisions
       // e.g., 'Charge' → chargePetSchema, ChargePet, ChargeContractStatus
       schemaPrefix: 'Charge',
+
+      // Optional: skip paths during resource generation. Strings match
+      // exactly; RegExps are tested against the path. Patterns are checked
+      // against the path *after* `stripPathPrefix` is applied. Useful for
+      // endpoints that don't fit the JSON request/response model (e.g. SSE
+      // streams handled by the Vercel AI SDK).
+      exclude: ['/policy/chat', /^\/internal\//],
     },
   ],
 });

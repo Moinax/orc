@@ -62,6 +62,7 @@ export async function generateClient(
     enumRegistry,
     runtimePackage,
     schemaPrefix: config.schemaPrefix,
+    exclude: config.exclude,
   });
 
   // Generate resources FIRST (registers query param enums)
