@@ -3,7 +3,7 @@ import { formatError, ParseError } from './errors';
 
 function applyPartial(schema: ZodTypeAny, discriminator?: string): ZodTypeAny {
   if (schema instanceof ZodObject) {
-    const shape = schema._def.shape();
+    const shape = schema.shape;
     const partialShape: Record<string, ZodTypeAny> = {};
 
     for (const [key, value] of Object.entries(shape)) {
@@ -17,11 +17,11 @@ function applyPartial(schema: ZodTypeAny, discriminator?: string): ZodTypeAny {
   if (schema instanceof ZodDiscriminatedUnion) {
     const partialOptions = schema.options.map((option: unknown) => {
       if (option instanceof ZodObject) {
-        return applyPartial(option, schema.discriminator);
+        return applyPartial(option, schema._def.discriminator);
       }
       return option;
     });
-    return z.discriminatedUnion(schema.discriminator, partialOptions);
+    return z.discriminatedUnion(schema._def.discriminator, partialOptions);
   }
 
   if (schema instanceof z.ZodArray) {
