@@ -55,10 +55,13 @@ describe('parseSchema', () => {
         z.object({ type: z.literal('b'), b: z.number() }),
       ])
       .describe('UnionSchema');
-    // Extra key triggers the partial fallback; the discriminator must be
-    // preserved so the correct branch is still selected.
-    const result = parseSchema(schema, { type: 'a', a: 'hello', extra: 'field' });
-    expect(result).toMatchObject({ type: 'a', a: 'hello' });
+    // A missing required field (`a`) on the matched branch makes the strict
+    // parse throw, triggering the partial fallback. `applyPartial` must
+    // preserve the discriminator so the correct branch is still selected
+    // while making the other fields optional.
+    const result = parseSchema(schema, { type: 'a' });
+    expect(result).toEqual({ type: 'a' });
+    expect(warnSpy).toHaveBeenCalled();
     warnSpy.mockRestore();
   });
 });
