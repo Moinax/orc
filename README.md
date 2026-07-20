@@ -176,22 +176,27 @@ npm run build     # Build with tsup
 npm run typecheck # Type check with tsc
 ```
 
-## Publishing
+## Releasing
+
+Versioning and the changelog are managed with [changesets](https://github.com/changesets/changesets).
+
+When making a change worth releasing, add a changeset and commit it alongside the change:
 
 ```bash
-# Bump version (creates commit + git tag)
-npm version patch   # 0.1.0 → 0.1.1
-npm version minor   # 0.1.0 → 0.2.0
-npm version major   # 0.1.0 → 1.0.0
+pnpm changeset   # pick the bump type (patch/minor/major) and write a summary
+```
 
-# Publish (prepublishOnly will run the build automatically)
-npm publish --access public
+To cut a release once one or more changesets have accumulated:
 
-# Push commit and tag to remote
+```bash
+pnpm changeset version   # consume changesets: bump package.json, update CHANGELOG.md
+git add -A && git commit -m "x.y.z"
+
+pnpm release             # build and publish to npm, create the git tag
 git push --follow-tags
 ```
 
-Note: `--access public` is required for scoped packages (`@moinax/orc`). You must be logged in via `npm login`.
+You must be logged in via `npm login`. Publish access is configured in `.changeset/config.json` (`access: public`, required for the scoped package).
 
 ## License
 
