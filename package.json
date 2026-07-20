@@ -27,7 +27,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "version": "changeset version",
+    "release": "changeset publish"
   },
   "dependencies": {
     "commander": "^13.1.0",
@@ -39,6 +41,7 @@
     "zod": "^3.23.0 || ^4.0.0"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.31.1",
     "@types/node": "^22.13.0",
     "@types/pluralize": "^0.0.33",
     "prettier": "^3.5.3",
