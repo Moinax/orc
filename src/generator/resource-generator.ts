@@ -11,6 +11,7 @@ import {
   prefixSchemaConst,
   prefixTypeName,
   operationIdToMethodName,
+  stripGetPrefix,
   getResourcePath,
   buildPathTree,
   cleanSchemaName,
@@ -74,6 +75,20 @@ export class ResourceGenerator {
     );
   }
 
+  /**
+   * A GET operation is a binary download when the spec declares a success
+   * content type that isn't application/json (e.g. application/pdf,
+   * application/octet-stream).
+   */
+  private isDownloadOperation(httpMethod: string, operation: OpenAPIOperation): boolean {
+    if (httpMethod !== 'get') return false;
+
+    const content = (operation.responses?.['200'] || operation.responses?.['201'])?.content;
+    if (!content) return false;
+    const contentTypes = Object.keys(content);
+    return contentTypes.length > 0 && !contentTypes.includes('application/json');
+  }
+
   private applyExcludeFilter(
     paths: Record<string, Record<string, OpenAPIOperation | OpenAPIParameter[]>>,
   ): Record<string, Record<string, OpenAPIOperation | OpenAPIParameter[]>> {
@@ -125,7 +140,7 @@ export class ResourceGenerator {
           this.collectedInlineSchemas.set(schemaConstName, {
             schema: bodySchema,
             isInput: true,
-            typeName: prefixTypeName(`${resourceClassName}${pascalCase(methodName)}Body`, this.schemaPrefix),
+            typeName: prefixTypeName(`${resourceClassName}${pascalCase(stripGetPrefix(methodName))}Body`, this.schemaPrefix),
           });
         }
       }
@@ -144,7 +159,7 @@ export class ResourceGenerator {
           this.collectedInlineSchemas.set(schemaConstName, {
             schema: inlineSchema,
             isInput: false,
-            typeName: prefixTypeName(`${resourceClassName}${pascalCase(methodName)}Response`, this.schemaPrefix),
+            typeName: prefixTypeName(`${resourceClassName}${pascalCase(stripGetPrefix(methodName))}Response`, this.schemaPrefix),
           });
         }
       }
@@ -260,9 +275,10 @@ export class ResourceGenerator {
 
   private generateInlineSchemaName(resourceName: string, methodName: string, purpose: string): string {
     const prefix = this.schemaPrefix ? camelCase(this.schemaPrefix) : '';
+    const methodBase = stripGetPrefix(methodName);
     // When prefixed, resourceName must be PascalCased to avoid merging with the camelCase prefix.
     // Without prefix, resourceName stays camelCase as the leading segment.
-    const baseName = `${prefix}${prefix ? pascalCase(resourceName) : camelCase(resourceName)}${capitalize(methodName)}${capitalize(purpose)}Schema`;
+    const baseName = `${prefix}${prefix ? pascalCase(resourceName) : camelCase(resourceName)}${capitalize(methodBase)}${capitalize(purpose)}Schema`;
     return camelCase(baseName);
   }
 
@@ -363,6 +379,14 @@ export class ResourceGenerator {
       methodName = camelCase(operationId);
     }
 
+    return this.uniquifyMethodName(methodName, usedNames);
+  }
+
+  private getUniqueDownloadMethodName(operationId: string | undefined, usedNames: Set<string>): string {
+    return this.uniquifyMethodName(operationId ? camelCase(operationId) : 'download', usedNames);
+  }
+
+  private uniquifyMethodName(methodName: string, usedNames: Set<string>): string {
     let finalName = methodName;
     let counter = 1;
     while (usedNames.has(finalName)) {
@@ -376,6 +400,28 @@ export class ResourceGenerator {
 
   private getOperationKey(pathPattern: string, httpMethod: string): string {
     return `${httpMethod}:${pathPattern}`;
+  }
+
+  /**
+   * Emits the query-param validation + URL construction block, leaving a
+   * `url` variable in scope of the generated method.
+   */
+  private pushQueryUrlLines(
+    lines: string[],
+    methodName: string,
+    resourceClassName: string,
+    pathTemplate: string,
+  ): void {
+    const { schemaConstName } = getResourcePrefixedParamNames(methodName, resourceClassName, this.schemaPrefix);
+    lines.push(`    const searchParams = new URLSearchParams();`);
+    lines.push(`    if (params) {`);
+    lines.push(`      const validated = parseSchema(${schemaConstName}, params);`);
+    lines.push(`      Object.entries(validated).forEach(([key, value]) => {`);
+    lines.push(`        if (value !== undefined) searchParams.set(key, String(value));`);
+    lines.push(`      });`);
+    lines.push(`    }`);
+    lines.push(`    const query = searchParams.toString();`);
+    lines.push(`    const url = query ? \`\${${pathTemplate}}?\${query}\` : ${pathTemplate};`);
   }
 
   private getResourceClassName(pathSegments: string[]): string {
@@ -411,15 +457,11 @@ export class ResourceGenerator {
       const successResponse = operation.responses?.['200'] || operation.responses?.['201'];
       const responseContent = successResponse?.content?.['application/json'];
       const responseSchemaObj = responseContent?.schema;
-
-      const methodName = this.getUniqueMethodName(
-        operation.operationId,
-        httpMethod,
-        pathPattern,
-        usedMethodNames,
-        responseSchemaObj,
-      );
       const opKey = this.getOperationKey(pathPattern, httpMethod);
+
+      const methodName = this.isDownloadOperation(httpMethod, operation)
+        ? this.getUniqueDownloadMethodName(operation.operationId, usedMethodNames)
+        : this.getUniqueMethodName(operation.operationId, httpMethod, pathPattern, usedMethodNames, responseSchemaObj);
       operationMethodNames.set(opKey, methodName);
 
       const queryParams = this.getQueryParams(operation);
@@ -447,15 +489,15 @@ export class ResourceGenerator {
     }
     if (hasPaginatedResponse) {
       schemaImports.add('paginationResponseSchema');
-      typeImports.set('paginationResponseSchema', 'PaginationResponse');
     }
 
+    // Response types are inferred from parseSchema, so only the schema consts
+    // are imported; type imports are needed for body parameters only.
     for (const { pathPattern, operation } of node.operations) {
       const responseSchema = this.getResponseSchemaName(operation, pathPattern);
       if (responseSchema) {
         const schemaConst = prefixSchemaConst(responseSchema, this.schemaPrefix);
         schemaImports.add(schemaConst);
-        typeImports.set(schemaConst, prefixTypeName(responseSchema, this.schemaPrefix));
       }
       const requestSchema = this.getRequestSchemaName(operation, pathPattern);
       if (requestSchema) {
@@ -481,7 +523,7 @@ export class ResourceGenerator {
       }
     }
 
-    const inlineResponseSchemas = new Map<string, { schemaConst: string; typeName: string }>();
+    const inlineResponseSchemas = new Map<string, string>();
     for (const { pathPattern, httpMethod, operation } of node.operations) {
       if (this.hasInlineResponseSchema(operation)) {
         const responseSchema = this.getResponseSchemaName(operation, pathPattern);
@@ -489,10 +531,8 @@ export class ResourceGenerator {
           const opKey = this.getOperationKey(pathPattern, httpMethod);
           const methodName = operationMethodNames.get(opKey)!;
           const schemaConstName = this.generateInlineSchemaName(resourceClassName, methodName, 'response');
-          const typeName = schemaConstToTypeName(schemaConstName);
-          inlineResponseSchemas.set(opKey, { schemaConst: schemaConstName, typeName });
+          inlineResponseSchemas.set(opKey, schemaConstName);
           schemaImports.add(schemaConstName);
-          typeImports.set(schemaConstName, typeName);
         }
       }
     }
@@ -515,6 +555,9 @@ export class ResourceGenerator {
     }
 
     lines.push(`import { Resource } from '${parentImportPath}Resource';`);
+    if (childResources.length > 0) {
+      lines.push(`import type ${this.clientClassName} from '${parentImportPath}${this.clientClassName}';`);
+    }
 
     const schemaImportPlaceholderIndex = lines.length;
     lines.push('__SCHEMA_IMPORTS_PLACEHOLDER__');
@@ -569,9 +612,7 @@ export class ResourceGenerator {
 
     if (childResources.length > 0) {
       lines.push('');
-      lines.push(
-        `  constructor(client: InstanceType<typeof import('${parentImportPath}${this.clientClassName}').default>) {`,
-      );
+      lines.push(`  constructor(client: ${this.clientClassName}) {`);
       lines.push('    super(client);');
       for (const child of childResources) {
         lines.push(`    this.${child.propertyName} = new ${child.className}Resource(client);`);
@@ -616,12 +657,26 @@ export class ResourceGenerator {
       let pathTemplate = fullPath.replace(/\{(\w+)\}/g, '${$1}');
       pathTemplate = '`' + pathTemplate + '`';
 
+      if (this.isDownloadOperation(httpMethod, operation)) {
+        params.push('filename?: string');
+        lines.push('');
+        lines.push(`  async ${methodName}(${params.join(', ')}) {`);
+        if (queryParams.length > 0) {
+          this.pushQueryUrlLines(lines, methodName, resourceClassName, pathTemplate);
+          lines.push(`    return this.client.download(url, filename);`);
+        } else {
+          lines.push(`    return this.client.download(${pathTemplate}, filename);`);
+        }
+        lines.push('  }');
+        continue;
+      }
+
       const successResponse = operation.responses?.['200'] || operation.responses?.['201'];
       const responseContent = successResponse?.content?.['application/json'];
       const responseSchemaObj = responseContent?.schema;
 
-      let returnType = 'void';
       let parseLogic = '';
+      let isUntypedPassthrough = false;
 
       if (responseSchemaObj) {
         if (responseSchemaObj.type === 'object' && responseSchemaObj.properties?.pagination) {
@@ -632,60 +687,42 @@ export class ResourceGenerator {
             const itemSchemaConst = prefixSchemaConst(itemSchema, this.schemaPrefix);
             const itemTypeName = prefixTypeName(itemSchema, this.schemaPrefix);
             schemaImports.add(itemSchemaConst);
-            typeImports.set(itemSchemaConst, itemTypeName);
-            returnType = `{ pagination: PaginationResponse; data: ${itemTypeName}[] }`;
+            parseLogic = `const schema = z.object({ pagination: paginationResponseSchema, data: z.array(${itemSchemaConst}) }).describe('Paginated${itemTypeName}List');
+    return parseSchema(schema, response);`;
+          } else if (responseSchema) {
+            const itemSchemaConst = prefixSchemaConst(responseSchema, this.schemaPrefix);
+            const itemTypeName = prefixTypeName(responseSchema, this.schemaPrefix);
+            schemaImports.add(itemSchemaConst);
             parseLogic = `const schema = z.object({ pagination: paginationResponseSchema, data: z.array(${itemSchemaConst}) }).describe('Paginated${itemTypeName}List');
     return parseSchema(schema, response);`;
           } else {
-            if (responseSchema) {
-              const itemSchemaConst = prefixSchemaConst(responseSchema, this.schemaPrefix);
-              const itemTypeName = prefixTypeName(responseSchema, this.schemaPrefix);
-              schemaImports.add(itemSchemaConst);
-              typeImports.set(itemSchemaConst, itemTypeName);
-              returnType = `{ pagination: PaginationResponse; data: ${itemTypeName}[] }`;
-              parseLogic = `const schema = z.object({ pagination: paginationResponseSchema, data: z.array(${itemSchemaConst}) }).describe('Paginated${itemTypeName}List');
+            parseLogic = `const schema = z.object({ pagination: paginationResponseSchema, data: z.array(z.unknown()) }).describe('PaginatedList');
     return parseSchema(schema, response);`;
-            } else {
-              returnType = `{ pagination: PaginationResponse; data: unknown[] }`;
-              parseLogic = `const schema = z.object({ pagination: paginationResponseSchema, data: z.array(z.unknown()) }).describe('PaginatedList');
-    return parseSchema(schema, response);`;
-            }
           }
         } else if (responseSchema) {
           const schemaConstName = prefixSchemaConst(responseSchema, this.schemaPrefix);
-          const typeName = prefixTypeName(responseSchema, this.schemaPrefix);
-          returnType = typeName;
           parseLogic = `return parseSchema(${schemaConstName}, response);`;
           schemaImports.add(schemaConstName);
-          typeImports.set(schemaConstName, typeName);
-        } else if (inlineResponseSchemas.get(opKey)) {
-          const inlineSchema = inlineResponseSchemas.get(opKey)!;
-          returnType = inlineSchema.typeName;
-          parseLogic = `return parseSchema(${inlineSchema.schemaConst}, response);`;
+        } else if (inlineResponseSchemas.has(opKey)) {
+          parseLogic = `return parseSchema(${inlineResponseSchemas.get(opKey)!}, response);`;
         } else {
-          returnType = 'unknown';
           parseLogic = 'return response;';
+          isUntypedPassthrough = true;
         }
       }
 
+      // The return type is inferred from parseSchema (or void); only untyped
+      // passthroughs keep an explicit annotation to avoid leaking `any`.
+      const returnAnnotation = isUntypedPassthrough ? ': Promise<unknown>' : '';
       lines.push('');
-      lines.push(`  async ${methodName}(${params.join(', ')}): Promise<${returnType}> {`);
+      lines.push(`  async ${methodName}(${params.join(', ')})${returnAnnotation} {`);
 
       if (queryParams.length > 0) {
-        const { schemaConstName } = getResourcePrefixedParamNames(methodName, resourceClassName, this.schemaPrefix);
-        lines.push(`    const searchParams = new URLSearchParams();`);
-        lines.push(`    if (params) {`);
-        lines.push(`      const validated = parseSchema(${schemaConstName}, params);`);
-        lines.push(`      Object.entries(validated).forEach(([key, value]) => {`);
-        lines.push(`        if (value !== undefined) searchParams.set(key, String(value));`);
-        lines.push(`      });`);
-        lines.push(`    }`);
-        lines.push(`    const query = searchParams.toString();`);
-        lines.push(`    const url = query ? \`\${${pathTemplate}}?\${query}\` : ${pathTemplate};`);
+        this.pushQueryUrlLines(lines, methodName, resourceClassName, pathTemplate);
       }
 
       const urlVar = queryParams.length > 0 ? 'url' : pathTemplate;
-      const needsResponse = returnType !== 'void';
+      const needsResponse = !!responseSchemaObj;
       const responsePrefix = needsResponse ? 'const response = ' : '';
 
       const hasBodyParam = ['post', 'put', 'patch'].includes(httpMethod) && !!operation.requestBody;

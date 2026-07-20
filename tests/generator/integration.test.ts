@@ -201,7 +201,7 @@ describe('Integration: generateClient', () => {
 
     // Method signature must not declare a `body` parameter, and the call
     // must not reference an undeclared `body` variable.
-    expect(policyChatResource!.content).toMatch(/async create\(\):\s*Promise<void>/);
+    expect(policyChatResource!.content).toMatch(/async create\(\) \{/);
     expect(policyChatResource!.content).toContain('await this.client.post(`/policy/chat`);');
     expect(policyChatResource!.content).not.toMatch(/post\([^)]*,\s*body\)/);
   });
@@ -250,6 +250,80 @@ describe('Integration: generateClient', () => {
     expect(
       result.files!.find((f) => path.basename(f.path) === 'Health.resource.ts'),
     ).toBeDefined();
+  });
+
+  it('generates download methods for operations with a non-JSON success content type', async () => {
+    const specPath = path.join(fixtureDir, 'documents.json');
+
+    const result = await generateClient(
+      {
+        name: 'Documents',
+        spec: specPath,
+        output: '/tmp/orc-test-output',
+      },
+      { write: false },
+    );
+
+    const documentsResource = result.files!.find(
+      (f) => path.basename(f.path) === 'ContractsDocuments.resource.ts',
+    );
+    expect(documentsResource).toBeDefined();
+    expect(documentsResource!.content).toContain(
+      'async download(contractId: string, documentId: number, filename?: string) {',
+    );
+    expect(documentsResource!.content).toContain(
+      'return this.client.download(`/contracts/${contractId}/documents/${documentId}`, filename);',
+    );
+    // The JSON list method on the same resource is untouched
+    expect(documentsResource!.content).toContain('async getList(contractId: string)');
+
+    const fileResource = result.files!.find((f) => path.basename(f.path) === 'ReportsFile.resource.ts');
+    expect(fileResource).toBeDefined();
+    expect(fileResource!.content).toContain('async download(reportId: string, filename?: string) {');
+    expect(fileResource!.content).toContain('return this.client.download(`/reports/${reportId}/file`, filename);');
+  });
+
+  it('imports the client type instead of inline import() in child-resource constructors', async () => {
+    const specPath = path.join(fixtureDir, 'documents.json');
+
+    const result = await generateClient(
+      {
+        name: 'Documents',
+        spec: specPath,
+        output: '/tmp/orc-test-output',
+      },
+      { write: false },
+    );
+
+    const contractsResource = result.files!.find((f) => path.basename(f.path) === 'Contracts.resource.ts');
+    expect(contractsResource).toBeDefined();
+    expect(contractsResource!.content).toContain("import type DocumentsClient from '../DocumentsClient';");
+    expect(contractsResource!.content).toContain('constructor(client: DocumentsClient) {');
+    expect(contractsResource!.content).not.toContain('InstanceType');
+  });
+
+  it('hoists inline { data: [...] } list responses into a named item schema', async () => {
+    const specPath = path.join(fixtureDir, 'documents.json');
+
+    const result = await generateClient(
+      {
+        name: 'Documents',
+        spec: specPath,
+        output: '/tmp/orc-test-output',
+      },
+      { write: false },
+    );
+
+    const schemasFile = result.files!.find((f) => path.basename(f.path) === 'schemas.ts');
+    expect(schemasFile).toBeDefined();
+    expect(schemasFile!.content).toContain('export const contractsDocumentsListItemSchema');
+    expect(schemasFile!.content).toContain(
+      'export type ContractsDocumentsListItem = z.output<typeof contractsDocumentsListItemSchema>;',
+    );
+    expect(schemasFile!.content).toContain('data: z.array(contractsDocumentsListItemSchema)');
+    // The response schema keeps its name and strictness
+    expect(schemasFile!.content).toContain('export const contractsDocumentsListResponseSchema');
+    expect(schemasFile!.content).toMatch(/data: z\.array\(contractsDocumentsListItemSchema\),\n\}\)\.strict\(\)/);
   });
 
   it('generates main index with re-exports', async () => {

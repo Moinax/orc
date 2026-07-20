@@ -111,10 +111,10 @@ describe('prefixTypeName', () => {
 });
 
 describe('getResourcePrefixedParamNames', () => {
-  it('prefixes get methods correctly', () => {
+  it('drops the get verb from get-method names', () => {
     const result = getResourcePrefixedParamNames('getList', 'Vehicles');
-    expect(result.schemaConstName).toBe('getVehicleListParamsSchema');
-    expect(result.typeName).toBe('GetVehicleListParams');
+    expect(result.schemaConstName).toBe('vehicleListParamsSchema');
+    expect(result.typeName).toBe('VehicleListParams');
   });
 
   it('prefixes non-get methods correctly', () => {
@@ -125,8 +125,8 @@ describe('getResourcePrefixedParamNames', () => {
 
   it('applies schemaPrefix to get methods', () => {
     const result = getResourcePrefixedParamNames('getList', 'Vehicles', 'Charge');
-    expect(result.schemaConstName).toBe('getChargeVehicleListParamsSchema');
-    expect(result.typeName).toBe('GetChargeVehicleListParams');
+    expect(result.schemaConstName).toBe('chargeVehicleListParamsSchema');
+    expect(result.typeName).toBe('ChargeVehicleListParams');
   });
 
   it('applies schemaPrefix to non-get methods', () => {

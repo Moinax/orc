@@ -17,6 +17,15 @@ export function pascalCase(str: string): string {
   return capitalize(camelCase(str));
 }
 
+/**
+ * Strips the leading `get` verb from a method name for schema/type naming, so
+ * generated names read `ContractListParams` / `ContractsDocumentsListResponse`
+ * rather than `GetContractListParams` / `ContractsDocumentsGetListResponse`.
+ */
+export function stripGetPrefix(methodName: string): string {
+  return methodName.replace(/^get(?=[A-Z]|$)/, '') || methodName;
+}
+
 export function schemaConstToTypeName(schemaConstName: string): string {
   const withoutSuffix = schemaConstName.replace(/Schema$/, '');
   return pascalCase(withoutSuffix);
@@ -56,11 +65,11 @@ export function getResourcePrefixedParamNames(
   const singularResource = singularize(resourceClassName);
   const prefix = schemaPrefix ? pascalCase(schemaPrefix) : '';
 
-  if (methodName.startsWith('get')) {
-    const rest = methodName.slice(3);
+  const rest = stripGetPrefix(methodName);
+  if (rest !== methodName) {
     return {
-      schemaConstName: `get${prefix}${singularResource}${rest}ParamsSchema`,
-      typeName: `Get${prefix}${singularResource}${rest}Params`,
+      schemaConstName: `${camelCase(`${prefix}${singularResource}${rest}`)}ParamsSchema`,
+      typeName: `${prefix}${singularResource}${rest}Params`,
     };
   }
 

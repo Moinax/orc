@@ -35,6 +35,25 @@ export class ZodGenerator {
     this.inlineSchemas = inlineSchemas;
   }
 
+  /**
+   * Returns the inline item object of a `{ data: [...] }` list response, or
+   * null when the schema has any other shape (extra properties, $ref items,
+   * optional data, non-object items).
+   */
+  private getHoistableListItem(schema: OpenAPISchema): OpenAPISchema | null {
+    if (schema.type !== 'object' || !schema.properties) return null;
+
+    const propertyNames = Object.keys(schema.properties);
+    if (propertyNames.length !== 1 || propertyNames[0] !== 'data') return null;
+    if (!schema.required?.includes('data')) return null;
+
+    const data = schema.properties.data;
+    if (data.type !== 'array' || !data.items || data.items.$ref) return null;
+    if (data.items.type !== 'object' || !data.items.properties) return null;
+
+    return data.items;
+  }
+
   convertSchema(schema: OpenAPISchema | undefined, schemaName: string | null = null, isTopLevel = false): string {
     if (!schema) return 'z.unknown()';
 
@@ -443,6 +462,30 @@ export class ZodGenerator {
       for (const [schemaName, schemaInfo] of this.inlineSchemas) {
         const { schema, isInput, typeName } = schemaInfo;
         const contextName = isInput ? 'InlineInput' : 'InlineOutput';
+
+        // List responses ({ data: [...] } with an inline item object) get their
+        // item hoisted to a named schema/type so consumers can reference it
+        // (e.g. ContractsDocumentsListItem) instead of indexing into the
+        // response type.
+        const listItem =
+          !isInput && schemaName.endsWith('ResponseSchema') ? this.getHoistableListItem(schema) : null;
+        if (listItem) {
+          const itemSchemaName = schemaName.replace(/ResponseSchema$/, 'ItemSchema');
+          const itemTypeName = typeName.replace(/Response$/, 'Item');
+          const itemZod = this.convertSchema(listItem, contextName, true);
+          schemaOutput.push(`export const ${itemSchemaName} = ${itemZod}.describe('${itemTypeName}');`);
+          schemaOutput.push(`export type ${itemTypeName} = z.output<typeof ${itemSchemaName}>;`);
+          schemaOutput.push('');
+
+          const strict = schema.additionalProperties === false ? '.strict()' : '';
+          schemaOutput.push(
+            `export const ${schemaName} = z.object({\n  data: z.array(${itemSchemaName}),\n})${strict}.describe('${typeName}');`,
+          );
+          schemaOutput.push(`export type ${typeName} = z.output<typeof ${schemaName}>;`);
+          schemaOutput.push('');
+          continue;
+        }
+
         const zodSchema = this.convertSchema(schema, contextName, true);
         schemaOutput.push(`export const ${schemaName} = ${zodSchema}.describe('${typeName}');`);
         const inferType = isInput ? 'z.input' : 'z.output';
