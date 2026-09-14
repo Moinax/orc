@@ -287,9 +287,20 @@ export class ResourceGenerator {
       .filter((p): p is OpenAPIParameter => 'in' in p && p.in === 'path')
       .map((p) => ({
         name: p.name,
-        type: this.paramTypeToTs(p.schema),
+        type: this.paramTypeToTs(this.withoutNull(p.schema)),
         required: p.required !== false,
       }));
+  }
+
+  // A path segment cannot be null, whatever the schema says. With nothing left once null is
+  // removed, the parameter falls back to the default string type.
+  private withoutNull(schema?: OpenAPISchema): OpenAPISchema | undefined {
+    if (!schema) return schema;
+    const { nullable: _nullable, anyOf, type, ...rest } = schema;
+    const branches = anyOf?.filter((s) => s.type !== 'null') ?? [];
+    if (branches.length > 1) return { ...rest, anyOf: branches };
+    if (branches.length === 1) return { ...rest, ...branches[0] };
+    return type === 'null' ? rest : { ...rest, type };
   }
 
   private getQueryParams(
@@ -307,16 +318,28 @@ export class ResourceGenerator {
 
   private paramTypeToTs(schema?: OpenAPISchema): string {
     if (!schema) return 'string';
-    if (schema.enum) return schema.enum.map((v) => `'${v}'`).join(' | ');
-    switch (schema.type) {
-      case 'integer':
-      case 'number':
-        return 'number';
-      case 'boolean':
-        return 'boolean';
-      default:
-        return 'string';
+    let tsType: string;
+    if (schema.anyOf) {
+      tsType = [...new Set(schema.anyOf.map((s) => this.paramTypeToTs(s)))].join(' | ');
+    } else if (schema.enum) {
+      tsType = schema.enum.map((v) => `'${v}'`).join(' | ');
+    } else {
+      switch (schema.type) {
+        case 'integer':
+        case 'number':
+          tsType = 'number';
+          break;
+        case 'boolean':
+          tsType = 'boolean';
+          break;
+        case 'null':
+          tsType = 'null';
+          break;
+        default:
+          tsType = 'string';
+      }
     }
+    return schema.nullable ? `${tsType} | null` : tsType;
   }
 
   private paramToZod(
@@ -326,8 +349,16 @@ export class ResourceGenerator {
     const { schema, name: paramName } = param;
     if (!schema) return 'z.string()';
 
+    const zodType = this.paramSchemaToZod(schema, paramName, resourceName);
+    return param.required ? zodType : `${zodType}.optional()`;
+  }
+
+  private paramSchemaToZod(schema: OpenAPISchema, paramName: string, resourceName?: string): string {
     let zodType: string;
-    if (schema.enum) {
+    if (schema.anyOf) {
+      const options = schema.anyOf.map((s) => this.paramSchemaToZod(s, paramName, resourceName));
+      zodType = options.length === 1 ? options[0] : `z.union([${options.join(', ')}])`;
+    } else if (schema.enum) {
       if (isBooleanLikeEnum(schema.enum)) {
         zodType = 'z.boolean()';
       } else {
@@ -350,16 +381,14 @@ export class ResourceGenerator {
         case 'boolean':
           zodType = 'z.boolean()';
           break;
+        case 'null':
+          zodType = 'z.null()';
+          break;
         default:
           zodType = 'z.string()';
       }
     }
-
-    if (!param.required) {
-      zodType = `${zodType}.optional()`;
-    }
-
-    return zodType;
+    return schema.nullable ? `${zodType}.nullable()` : zodType;
   }
 
   private isPaginationParam(paramName: string): boolean {
@@ -417,7 +446,7 @@ export class ResourceGenerator {
     lines.push(`    if (params) {`);
     lines.push(`      const validated = parseSchema(${schemaConstName}, params);`);
     lines.push(`      Object.entries(validated).forEach(([key, value]) => {`);
-    lines.push(`        if (value !== undefined) searchParams.set(key, String(value));`);
+    lines.push(`        if (value !== undefined && value !== null) searchParams.set(key, String(value));`);
     lines.push(`      });`);
     lines.push(`    }`);
     lines.push(`    const query = searchParams.toString();`);

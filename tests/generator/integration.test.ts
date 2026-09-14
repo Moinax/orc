@@ -6,6 +6,31 @@ import { generateClient } from '../../src/generator/client-generator';
 const fixtureDir = path.join(__dirname, '..', 'fixtures');
 
 describe('Integration: generateClient', () => {
+  it('normalizes OpenAPI 3.1 type arrays before generating', async () => {
+    const result = await generateClient(
+      { name: 'Widgets', spec: path.join(fixtureDir, 'type-arrays.json'), output: '/tmp/orc-test-output' },
+      { write: false, runtimePackage: '@moinax/orc' },
+    );
+
+    const schemas = result.files!.find((f) => f.path.endsWith('schemas.ts'))!.content;
+    expect(schemas).toContain('label: z.string().nullable()');
+    expect(schemas).toContain('score: z.number().nullable()');
+    expect(schemas).toContain('ref: z.union([z.string(), z.number()])');
+    expect(schemas).toContain('tag: z.string()');
+    expect(schemas).not.toContain('z.unknown()');
+
+    const resource = result.files!.find((f) => path.basename(f.path) === 'Widgets.resource.ts')!.content;
+    expect(resource).toContain('minScore: z.number().int().nullable().optional()');
+    expect(resource).toContain('ref: z.union([z.string(), z.number()]).optional()');
+    expect(resource).toContain('getDetail(id: string)');
+    expect(resource).toContain('if (value !== undefined && value !== null) searchParams.set');
+
+    const resources = result.files!.filter((f) => f.path.endsWith('.resource.ts')).map((f) => f.content);
+    expect(resources.some((content) => /partId: number[,)]/.test(content))).toBe(true);
+    expect(resources.some((content) => content.includes('partId: number | null'))).toBe(false);
+    expect(resources.some((content) => /tag: string[,)]/.test(content))).toBe(true);
+  });
+
   it('generates a client from petstore spec (dry-run)', async () => {
     const specPath = path.join(fixtureDir, 'petstore.json');
 

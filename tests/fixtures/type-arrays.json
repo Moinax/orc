@@ -1,0 +1,216 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Widgets API",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/widgets": {
+      "get": {
+        "operationId": "listWidgets",
+        "tags": [
+          "Widgets"
+        ],
+        "parameters": [
+          {
+            "name": "minScore",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "ref",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "number"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WidgetSchema"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/widgets/{id}": {
+      "get": {
+        "operationId": "getWidget",
+        "tags": [
+          "Widgets"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": [
+                "string"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WidgetSchema"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/widgets/{id}/parts/{partId}": {
+      "get": {
+        "operationId": "getWidgetPart",
+        "tags": [
+          "Widgets"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": [
+                "string"
+              ]
+            }
+          },
+          {
+            "name": "partId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WidgetSchema"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/widgets/{id}/tags/{tag}": {
+      "get": {
+        "operationId": "getWidgetTag",
+        "tags": [
+          "Widgets"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": [
+                "string"
+              ]
+            }
+          },
+          {
+            "name": "tag",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": [
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WidgetSchema"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "WidgetSchema": {
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "score",
+          "ref",
+          "tag"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "score": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "ref": {
+            "type": [
+              "string",
+              "number"
+            ]
+          },
+          "tag": {
+            "type": [
+              "string"
+            ]
+          }
+        }
+      }
+    }
+  }
+}
