@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import type { OpenAPISpec } from './utils';
+import { normalizeTypeArrays, type OpenAPISpec } from './utils';
 
 export async function loadSpec(specPath: string): Promise<OpenAPISpec> {
   // If it's a URL, fetch it
@@ -13,7 +13,7 @@ export async function loadSpec(specPath: string): Promise<OpenAPISpec> {
     const spec = (await response.json()) as OpenAPISpec;
     console.log(`OpenAPI spec version: ${spec.openapi}`);
     console.log(`API title: ${spec.info.title}`);
-    return spec;
+    return normalizeTypeArrays(spec);
   }
 
   // Otherwise, read from file
@@ -34,5 +34,5 @@ export async function loadSpec(specPath: string): Promise<OpenAPISpec> {
 
   console.log(`OpenAPI spec version: ${spec.openapi}`);
   console.log(`API title: ${spec.info.title}`);
-  return spec;
+  return normalizeTypeArrays(spec);
 }

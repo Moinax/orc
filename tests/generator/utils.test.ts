@@ -10,6 +10,7 @@ import {
   prefixSchemaConst,
   prefixTypeName,
   validateFileName,
+  normalizeTypeArrays,
   validateOutputPath,
   isListResponse,
   deriveEntityFromPath,
@@ -302,5 +303,164 @@ describe('isActionWord', () => {
   it('identifies sub-resources (plural)', () => {
     expect(isActionWord('sessions')).toBe(false);
     expect(isActionWord('vehicles')).toBe(false);
+  });
+});
+
+describe('normalizeTypeArrays', () => {
+  it('turns [type, null] into the nullable form', () => {
+    expect(normalizeTypeArrays({ type: ['string', 'null'] })).toEqual({ type: 'string', nullable: true });
+    expect(normalizeTypeArrays({ type: ['integer', 'null'], minimum: 0 })).toEqual({
+      type: 'integer',
+      minimum: 0,
+      nullable: true,
+    });
+  });
+
+  it('collapses a single-type array to its scalar type', () => {
+    expect(normalizeTypeArrays({ type: ['string'] })).toEqual({ type: 'string' });
+    expect(normalizeTypeArrays({ type: ['null'] })).toEqual({ type: 'null' });
+  });
+
+  it('expands multi-type arrays to anyOf branches keeping sibling keywords', () => {
+    expect(normalizeTypeArrays({ type: ['string', 'number'], description: 'id' })).toEqual({
+      description: 'id',
+      anyOf: [
+        { type: 'string', description: 'id' },
+        { type: 'number', description: 'id' },
+      ],
+    });
+    expect(normalizeTypeArrays({ type: ['string', 'number', 'null'] })).toEqual({
+      anyOf: [{ type: 'string' }, { type: 'number' }, { type: 'null' }],
+    });
+  });
+
+  it('walks the whole spec: properties, items, parameters and responses', () => {
+    const spec = {
+      paths: {
+        '/things': {
+          get: {
+            parameters: [{ name: 'limit', in: 'query', schema: { type: ['integer', 'null'] } }],
+            responses: {
+              '200': {
+                content: { 'application/json': { schema: { type: ['object', 'null'], properties: {} } } },
+              },
+            },
+          },
+        },
+      },
+      components: {
+        schemas: {
+          Thing: {
+            type: 'object',
+            required: ['id', 'tags'],
+            properties: {
+              id: { type: ['string', 'null'], format: 'uuid' },
+              tags: { type: 'array', items: { type: ['string', 'null'] } },
+              kind: { type: 'string', enum: ['a', 'b'] },
+            },
+          },
+        },
+      },
+    };
+    expect(normalizeTypeArrays(spec)).toEqual({
+      paths: {
+        '/things': {
+          get: {
+            parameters: [{ name: 'limit', in: 'query', schema: { type: 'integer', nullable: true } }],
+            responses: {
+              '200': {
+                content: { 'application/json': { schema: { type: 'object', nullable: true, properties: {} } } },
+              },
+            },
+          },
+        },
+      },
+      components: {
+        schemas: {
+          Thing: {
+            type: 'object',
+            required: ['id', 'tags'],
+            properties: {
+              id: { type: 'string', format: 'uuid', nullable: true },
+              tags: { type: 'array', items: { type: 'string', nullable: true } },
+              kind: { type: 'string', enum: ['a', 'b'] },
+            },
+          },
+        },
+      },
+    });
+  });
+
+  it('keeps the type-independent keywords on the null branch too', () => {
+    expect(normalizeTypeArrays({ type: ['string', 'number', 'null'], description: 'd' })).toEqual({
+      description: 'd',
+      anyOf: [
+        { type: 'string', description: 'd' },
+        { type: 'number', description: 'd' },
+        { type: 'null', description: 'd' },
+      ],
+    });
+  });
+
+  it('narrows enum values to each branch type and drops empty branches', () => {
+    expect(normalizeTypeArrays({ type: ['string', 'number'], enum: ['a', 1] })).toEqual({
+      anyOf: [
+        { type: 'string', enum: ['a'] },
+        { type: 'number', enum: [1] },
+      ],
+    });
+    expect(normalizeTypeArrays({ type: ['string', 'number'], enum: ['a', 'b'] })).toEqual({
+      type: 'string',
+      enum: ['a', 'b'],
+    });
+  });
+
+  it('degrades a schema admitting no value to null instead of an empty union', () => {
+    expect(normalizeTypeArrays({ type: [], description: 'd' })).toEqual({ type: 'null', description: 'd' });
+    expect(normalizeTypeArrays({ type: ['string', 'number'], enum: [true, false] })).toEqual({ type: 'null' });
+  });
+
+  it('does not rewrite data values: example, examples, default, const, enum, vendor extensions', () => {
+    const data = { type: ['a', 'b'] };
+    const spec = {
+      type: 'object',
+      example: data,
+      examples: [data],
+      default: data,
+      const: data,
+      'x-vendor': data,
+      properties: { kind: { type: 'string', enum: ['x'] } },
+    };
+    expect(normalizeTypeArrays(spec)).toEqual(spec);
+  });
+
+  it('still rewrites schemas whose field or component name is a data keyword', () => {
+    const nullableBool = { type: ['boolean', 'null'] };
+    const spec = {
+      components: {
+        schemas: {
+          default: {
+            type: 'object',
+            properties: { default: nullableBool, enum: nullableBool, 'x-flag': nullableBool },
+          },
+        },
+      },
+    };
+    const normalized = { type: 'boolean', nullable: true };
+    expect(normalizeTypeArrays(spec)).toEqual({
+      components: {
+        schemas: {
+          default: {
+            type: 'object',
+            properties: { default: normalized, enum: normalized, 'x-flag': normalized },
+          },
+        },
+      },
+    });
+  });
+
+  it('leaves specs without type arrays untouched', () => {
+    const spec = { type: 'object', properties: { type: { type: 'string' } }, required: ['type'] };
+    expect(normalizeTypeArrays(spec)).toEqual(spec);
   });
 });

@@ -103,7 +103,7 @@ export class ZodGenerator {
       return `z.literal(${JSON.stringify(schema.const)})`;
     }
 
-    const isNullable = schema.nullable === true;
+    const isNullable = schema.nullable === true && !schema.enum?.includes(null);
     let zodSchema: string;
 
     switch (schema.type) {

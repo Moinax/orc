@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { ZodGenerator } from '../../src/generator/zod-generator';
 import { EnumRegistry } from '../../src/generator/enum-registry';
+import { normalizeTypeArrays } from '../../src/generator/utils';
 
 describe('ZodGenerator', () => {
   it('converts simple string schema', () => {
@@ -76,6 +77,22 @@ describe('ZodGenerator', () => {
       anyOf: [{ type: 'string' }, { type: 'number' }],
     });
     expect(result).toBe('z.union([z.string(), z.number()])');
+  });
+
+  it('converts normalized type arrays', () => {
+    const gen = new ZodGenerator({});
+    expect(gen.convertSchema(normalizeTypeArrays({ type: ['string', 'null'] }))).toBe('z.string().nullable()');
+    expect(gen.convertSchema(normalizeTypeArrays({ type: ['string', 'null'] }), 'PetInput')).toBe('z.string().nullish()');
+    expect(gen.convertSchema(normalizeTypeArrays({ type: ['string'] }))).toBe('z.string()');
+    expect(gen.convertSchema(normalizeTypeArrays({ type: ['string', 'number'] }))).toBe(
+      'z.union([z.string(), z.number()])',
+    );
+    expect(gen.convertSchema(normalizeTypeArrays({ type: ['string', 'null'], format: 'uuid' }))).toBe(
+      'z.string().uuid().nullable()',
+    );
+    expect(gen.convertSchema(normalizeTypeArrays({ type: ['string', 'null'], enum: ['a', 'b', null] }))).toMatch(
+      /^\w+\.nullable\(\)$/,
+    );
   });
 
   it('converts const values', () => {

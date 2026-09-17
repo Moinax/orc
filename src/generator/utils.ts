@@ -328,3 +328,70 @@ export function cleanSchemaName(name: string): string {
 
   return name;
 }
+
+/**
+ * JSON Schema 2020-12 / OpenAPI 3.1 express nullability and unions as a type array, e.g.
+ * `["string", "null"]`. The generators only understand the OpenAPI 3.0 shapes (`nullable` and
+ * `anyOf`), so the whole spec is rewritten once at load time, before any consumer reads `type`.
+ */
+export function normalizeTypeArrays<T>(node: T): T {
+  return walk(node, false) as T;
+}
+
+const NAMED_SCHEMA_MAPS = ['properties', 'patternProperties', 'schemas', '$defs', 'definitions'];
+
+function walk(node: unknown, isNamedSchemaMap: boolean): unknown {
+  if (Array.isArray(node)) return node.map((item) => walk(item, false));
+  if (node === null || typeof node !== 'object') return node;
+
+  const schema = Object.fromEntries(
+    Object.entries(node as Record<string, unknown>).map(([key, value]) => {
+      if (isNamedSchemaMap) return [key, walk(value, false)];
+      if (isDataKeyword(key)) return [key, value];
+      return [key, walk(value, NAMED_SCHEMA_MAPS.includes(key))];
+    }),
+  ) as Record<string, unknown>;
+  if (isNamedSchemaMap || !Array.isArray(schema.type)) return schema;
+
+  const { type, ...rest } = schema;
+  const types = [...new Set(type as string[])];
+  // A schema admitting no value at all is a spec bug: degrade to null rather than emit `z.union([])`.
+  if (types.length === 0) return { ...rest, type: 'null' };
+  if (types.length === 1) return { ...rest, type: types[0] };
+
+  const nonNullTypes = types.filter((t) => t !== 'null');
+  if (nonNullTypes.length === 1) return { ...rest, type: nonNullTypes[0], nullable: true };
+
+  // Every branch keeps the type-independent keywords. `enum` narrows to the values of the branch's
+  // own type, and a branch left without any admissible value disappears.
+  const { enum: enumValues, ...keywords } = rest;
+  const branches = types.flatMap((t) => {
+    if (!Array.isArray(enumValues)) return [{ ...rest, type: t }];
+    const values = enumValues.filter((value) => isValueOfType(value, t));
+    return values.length > 0 ? [{ ...rest, type: t, enum: values }] : [];
+  });
+  if (branches.length === 0) return { ...keywords, type: 'null' };
+  return branches.length === 1 ? branches[0] : { ...keywords, anyOf: branches };
+}
+
+// Values under these keywords (and vendor extensions) are data, not schemas. The check only applies
+// to a schema's own keywords: under a named map such as `properties`, the keys are field names.
+function isDataKeyword(key: string): boolean {
+  return ['example', 'examples', 'default', 'const', 'enum'].includes(key) || key.startsWith('x-');
+}
+
+function isValueOfType(value: unknown, type: string): boolean {
+  switch (type) {
+    case 'string':
+      return typeof value === 'string';
+    case 'number':
+    case 'integer':
+      return typeof value === 'number';
+    case 'boolean':
+      return typeof value === 'boolean';
+    case 'null':
+      return value === null;
+    default:
+      return true;
+  }
+}
