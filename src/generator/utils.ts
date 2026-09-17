@@ -335,24 +335,32 @@ export function cleanSchemaName(name: string): string {
  * `anyOf`), so the whole spec is rewritten once at load time, before any consumer reads `type`.
  */
 export function normalizeTypeArrays<T>(node: T): T {
-  if (Array.isArray(node)) return node.map(normalizeTypeArrays) as T;
+  return walk(node, false) as T;
+}
+
+const NAMED_SCHEMA_MAPS = ['properties', 'patternProperties', 'schemas', '$defs', 'definitions'];
+
+function walk(node: unknown, isNamedSchemaMap: boolean): unknown {
+  if (Array.isArray(node)) return node.map((item) => walk(item, false));
   if (node === null || typeof node !== 'object') return node;
 
   const schema = Object.fromEntries(
-    Object.entries(node as Record<string, unknown>).map(([key, value]) =>
-      isDataKeyword(key) ? [key, value] : [key, normalizeTypeArrays(value)],
-    ),
+    Object.entries(node as Record<string, unknown>).map(([key, value]) => {
+      if (isNamedSchemaMap) return [key, walk(value, false)];
+      if (isDataKeyword(key)) return [key, value];
+      return [key, walk(value, NAMED_SCHEMA_MAPS.includes(key))];
+    }),
   ) as Record<string, unknown>;
-  if (!Array.isArray(schema.type)) return schema as T;
+  if (isNamedSchemaMap || !Array.isArray(schema.type)) return schema;
 
   const { type, ...rest } = schema;
   const types = [...new Set(type as string[])];
   // A schema admitting no value at all is a spec bug: degrade to null rather than emit `z.union([])`.
-  if (types.length === 0) return { ...rest, type: 'null' } as T;
-  if (types.length === 1) return { ...rest, type: types[0] } as T;
+  if (types.length === 0) return { ...rest, type: 'null' };
+  if (types.length === 1) return { ...rest, type: types[0] };
 
   const nonNullTypes = types.filter((t) => t !== 'null');
-  if (nonNullTypes.length === 1) return { ...rest, type: nonNullTypes[0], nullable: true } as T;
+  if (nonNullTypes.length === 1) return { ...rest, type: nonNullTypes[0], nullable: true };
 
   // Every branch keeps the type-independent keywords. `enum` narrows to the values of the branch's
   // own type, and a branch left without any admissible value disappears.
@@ -362,11 +370,12 @@ export function normalizeTypeArrays<T>(node: T): T {
     const values = enumValues.filter((value) => isValueOfType(value, t));
     return values.length > 0 ? [{ ...rest, type: t, enum: values }] : [];
   });
-  if (branches.length === 0) return { ...keywords, type: 'null' } as T;
-  return (branches.length === 1 ? branches[0] : { ...keywords, anyOf: branches }) as T;
+  if (branches.length === 0) return { ...keywords, type: 'null' };
+  return branches.length === 1 ? branches[0] : { ...keywords, anyOf: branches };
 }
 
-// Values under these keywords (and vendor extensions) are data, not schemas.
+// Values under these keywords (and vendor extensions) are data, not schemas. The check only applies
+// to a schema's own keywords: under a named map such as `properties`, the keys are field names.
 function isDataKeyword(key: string): boolean {
   return ['example', 'examples', 'default', 'const', 'enum'].includes(key) || key.startsWith('x-');
 }

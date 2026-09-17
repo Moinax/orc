@@ -22,6 +22,11 @@ describe('Integration: generateClient', () => {
     const resource = result.files!.find((f) => path.basename(f.path) === 'Widgets.resource.ts')!.content;
     expect(resource).toContain('minScore: z.number().int().nullable().optional()');
     expect(resource).toContain('ref: z.union([z.string(), z.number()]).optional()');
+    expect(resource).toContain('sort: widgetSortSchema.nullable().optional()');
+    expect(resource).toContain('status: widgetStatusSchema.nullable().optional()');
+    const schemaImports = resource.match(/import \{([^}]+)\} from '\.\.\/schemas'/)![1];
+    expect(schemaImports).toContain('widgetSortSchema');
+    expect(schemaImports).toContain('widgetStatusSchema');
     expect(resource).toContain('getDetail(id: string)');
     expect(resource).toContain('if (value !== undefined && value !== null) searchParams.set');
 

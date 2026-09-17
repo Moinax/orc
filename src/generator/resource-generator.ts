@@ -345,21 +345,37 @@ export class ResourceGenerator {
   private paramToZod(
     param: { name: string; required: boolean; schema?: OpenAPISchema },
     resourceName?: string,
+    imports = new Set<string>(),
   ): string {
     const { schema, name: paramName } = param;
     if (!schema) return 'z.string()';
 
-    const zodType = this.paramSchemaToZod(schema, paramName, resourceName);
+    const zodType = this.paramSchemaToZod(schema, paramName, resourceName, imports);
     return param.required ? zodType : `${zodType}.optional()`;
   }
 
-  private paramSchemaToZod(schema: OpenAPISchema, paramName: string, resourceName?: string): string {
+  private paramSchemaToZod(
+    schema: OpenAPISchema,
+    paramName: string,
+    resourceName: string | undefined,
+    imports: Set<string>,
+  ): string {
     let zodType: string;
-    if (schema.anyOf) {
-      const options = schema.anyOf.map((s) => this.paramSchemaToZod(s, paramName, resourceName));
+    let nullable = schema.nullable === true;
+    if (schema.$ref) {
+      zodType = prefixSchemaConst(cleanSchemaName(schema.$ref.split('/').pop()!), this.schemaPrefix);
+      imports.add(zodType);
+    } else if (schema.anyOf) {
+      const branches = schema.anyOf.filter((s) => s.type !== 'null');
+      if (branches.length === 0) return 'z.null()';
+      const options = branches.map((s) => this.paramSchemaToZod(s, paramName, resourceName, imports));
       zodType = options.length === 1 ? options[0] : `z.union([${options.join(', ')}])`;
+      nullable = nullable || branches.length < schema.anyOf.length;
     } else if (schema.enum) {
-      if (isBooleanLikeEnum(schema.enum)) {
+      const values = schema.enum.filter((v): v is string => v !== null);
+      if (values.length === 0) return 'z.null()';
+      nullable = nullable || values.length < schema.enum.length;
+      if (isBooleanLikeEnum(values)) {
         zodType = 'z.boolean()';
       } else {
         const context = {
@@ -367,8 +383,8 @@ export class ResourceGenerator {
           resourceName: resourceName || this.currentResourceName || undefined,
           paramName: paramName,
         };
-        const enumInfo = this.enumRegistry.register(schema.enum, context);
-        zodType = enumInfo.schemaConstName;
+        zodType = this.enumRegistry.register(values, context).schemaConstName;
+        imports.add(zodType);
       }
     } else {
       switch (schema.type) {
@@ -388,7 +404,7 @@ export class ResourceGenerator {
           zodType = 'z.string()';
       }
     }
-    return schema.nullable ? `${zodType}.nullable()` : zodType;
+    return nullable ? `${zodType}.nullable()` : zodType;
   }
 
   private isPaginationParam(paramName: string): boolean {
@@ -607,16 +623,9 @@ export class ResourceGenerator {
         const specificParams = queryParams.filter((p) => !this.isPaginationParam(p.name));
 
         if (specificParams.length > 0) {
-          const props = specificParams.map((p) => {
-            const zodCode = this.paramToZod(p, resourceClassName);
-            if (p.schema?.enum) {
-              const enumInfo = this.enumRegistry.get(p.schema.enum);
-              if (enumInfo) {
-                schemaImports.add(enumInfo.schemaConstName);
-              }
-            }
-            return `  ${p.name}: ${zodCode}`;
-          });
+          const props = specificParams.map(
+            (p) => `  ${p.name}: ${this.paramToZod(p, resourceClassName, schemaImports)}`,
+          );
           queryParamsSchemas.push(
             `export const ${schemaConstName} = paginationParamsSchema.extend({\n${props.join(',\n')},\n});`,
           );

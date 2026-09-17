@@ -33,6 +33,40 @@
                 "number"
               ]
             }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "label",
+                    "score"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/WidgetStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
           }
         ],
         "responses": {
@@ -210,6 +244,13 @@
             ]
           }
         }
+      },
+      "WidgetStatus": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "live"
+        ]
       }
     }
   }

@@ -434,6 +434,31 @@ describe('normalizeTypeArrays', () => {
     expect(normalizeTypeArrays(spec)).toEqual(spec);
   });
 
+  it('still rewrites schemas whose field or component name is a data keyword', () => {
+    const nullableBool = { type: ['boolean', 'null'] };
+    const spec = {
+      components: {
+        schemas: {
+          default: {
+            type: 'object',
+            properties: { default: nullableBool, enum: nullableBool, 'x-flag': nullableBool },
+          },
+        },
+      },
+    };
+    const normalized = { type: 'boolean', nullable: true };
+    expect(normalizeTypeArrays(spec)).toEqual({
+      components: {
+        schemas: {
+          default: {
+            type: 'object',
+            properties: { default: normalized, enum: normalized, 'x-flag': normalized },
+          },
+        },
+      },
+    });
+  });
+
   it('leaves specs without type arrays untouched', () => {
     const spec = { type: 'object', properties: { type: { type: 'string' } }, required: ['type'] };
     expect(normalizeTypeArrays(spec)).toEqual(spec);

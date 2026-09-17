@@ -90,6 +90,9 @@ describe('ZodGenerator', () => {
     expect(gen.convertSchema(normalizeTypeArrays({ type: ['string', 'null'], format: 'uuid' }))).toBe(
       'z.string().uuid().nullable()',
     );
+    expect(gen.convertSchema(normalizeTypeArrays({ type: ['string', 'null'], enum: ['a', 'b', null] }))).toMatch(
+      /^\w+\.nullable\(\)$/,
+    );
   });
 
   it('converts const values', () => {
